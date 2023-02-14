@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+service RCRobot
+{
+ 
+    rpc Process(Command) returns (Message){}
+    rpc SendCommand(Command)returns(_None){}
+}
+
+message _None
+{
+
+}
+
+// a information about motor
+message Motor
+{
+    uint32 direction = 1;
+    //0 - upward
+    //1 - backward
+    //2 - fast stop
+    //3 - slow stop
+    uint32 speed = 2; 
+    // from 0 to 100
+}
+
+message DistanceSensor
+{
+    double distance = 1;
+    // distance in cm
+}
+
+message Gyroscope
+{
+    repeated double acceleration=3;
+    // three axis acceleration data
+    repeated double gyroscope = 6;
+    // three axis angular velocity data
+    repeated double accel_range=7;
+    // the max acceleration range
+    repeated double gyro_range=8; 
+    // the max angular velocity range
+}
+
+message Servo
+{
+    uint32 angle=1;
+}
+
+message AudioChunk
+{
+    repeated uint32 data=44100;
+    // the raw audio data
+}
+
+
+// Command to send to robot
+message Command
+{
+    Motor mA=1;
+    Motor mB=2;
+    Servo ear1=3;
+    Servo ear2=4;
+    
+}
+
+// Feedback from the robot
+message Message
+{
+    DistanceSensor front=1;
+    DistanceSensor floor=2;
+    Gyroscope gyroscope=3;
+    AudioChunk left=4;
+    AudioChunk right=5;
+    int32 status=6;
+    string message=7;
+}
