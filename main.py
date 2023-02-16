@@ -19,6 +19,7 @@ from emotions import EmotionModifier,EmotionTuple
 
 from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier,ShockModifier
 
+from mind import Mind
 
 data:dict = {
     "Motors":
@@ -56,6 +57,15 @@ modifiers:list[EmotionModifier]=[
     ShockModifier()
 ]
 
+
+def fitness_func(solution, solution_idx):
+    pass
+
+
+mind=Mind(emotions)
+
+
+mind.init_model()
 
 
 def select_mood(emotions:EmotionTuple):
@@ -96,6 +106,10 @@ with client.connect('192.168.108.216:5051') as channels:
         select_mood(emotions)
 
         curr_mood.loop()
+
+        mind.getData(data)
+
+        mind.loop()
 
         print("Send Command!")
         msg=client.send_message_data(stub,data)
