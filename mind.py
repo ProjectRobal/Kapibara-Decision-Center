@@ -13,6 +13,9 @@ class MindOutputs:
         self.speedB=speedB
         self.directionB=directionB
 
+    def get(self)->list[float]:
+        return [self.speedA,self.speedB,self.directionA,self.directionB]
+
 
 class Mind:
     OUTPUTS_BUFFER=10
@@ -56,7 +59,7 @@ class Mind:
 
 
     def init_model(self):
-        self.ga_instance=pygad.GA(num_generations=self.NUM_GENERATIONS,
+        self.ga_instance:pygad.GA=pygad.GA(num_generations=self.NUM_GENERATIONS,
                        num_parents_mating=10,
                        fitness_func=self.fitness,
                        sol_per_pop=8,
@@ -86,5 +89,41 @@ class Mind:
 
         self.audio_coff=(l/m,r/m)
 
+    def prepareInput(self):
+        self.inputs[0]=self.gyroscope[0]
+        self.inputs[1]=self.gyroscope[1]
+        self.inputs[2]=self.gyroscope[2]
+
+        self.inputs[3]=self.accelerometer[0]
+        self.inputs[4]=self.accelerometer[1]
+        self.inputs[5]=self.accelerometer[2]
+
+        self.inputs[6]=self.audio_coff[0]
+        self.inputs[7]=self.audio_coff[1]
+
+        i=0
+
+        for samp in self.audio:
+            self.inputs[8+i]=samp 
+            i=i+1
+
+        i=0
+        l=len(self.audio)
+
+        for out in self.last_outputs:
+            put=out.get()
+            for x in put:
+                self.inputs[8+i+l]=x
+                i=i+1
+        
+
     def loop(self):
-        pass
+        
+        self.ga_instance.run()
+
+        solution, solution_fitness, solution_idx = self.ga_instance.best_solution()
+        print("Parameters of the best solution : {solution}".format(solution=solution))
+        print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+
+        prediction = np.sum(np.array(self.inputs)*solution)
+        print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))

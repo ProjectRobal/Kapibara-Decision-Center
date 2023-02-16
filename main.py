@@ -58,10 +58,6 @@ modifiers:list[EmotionModifier]=[
 ]
 
 
-def fitness_func(solution, solution_idx):
-    pass
-
-
 mind=Mind(emotions)
 
 
@@ -89,6 +85,9 @@ def preprocess_data(msg:Message,data:dict):
 
 with client.connect('192.168.108.216:5051') as channels:
     stub=client.get_stub(channels)
+
+    def fitness_func(solution, solution_idx):
+        pass
     
     while True:
         msg=client.send_message_data(stub,data)
