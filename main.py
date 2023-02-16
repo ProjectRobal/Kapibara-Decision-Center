@@ -17,7 +17,7 @@ import numpy as np
 import behavior
 from emotions import EmotionModifier,EmotionTuple
 
-from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier
+from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier,ShockModifier
 
 
 data:dict = {
@@ -52,7 +52,8 @@ emotions=EmotionTuple()
 modifiers:list[EmotionModifier]=[
     HearingCenter(),
     FrontSensorModifier("Distance_Front"),
-    FloorSensorModifier("Distance_Floor")
+    FloorSensorModifier("Distance_Floor"),
+    ShockModifier()
 ]
 
 
@@ -92,18 +93,9 @@ with client.connect('192.168.108.216:5051') as channels:
         for mod in modifiers:
             mod.modify(emotions)
 
-        #audio=mic.record(2)/32767.0
-
-        #audio=filtfilt(b,a,audio)
-
-        #audio=tf.cast(audio,dtype=tf.float32)
-
-        #output="nervous"
-
-        #select_mood(output)
+        select_mood(emotions)
 
         curr_mood.loop()
-        #print(output)
 
         print("Send Command!")
         msg=client.send_message_data(stub,data)

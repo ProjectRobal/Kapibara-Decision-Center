@@ -1,6 +1,7 @@
 from emotions import EmotionModifier,EmotionTuple
 from kapibara_audio import KapibaraAudio,BUFFER_SIZE
 import numpy as np
+import time
 
 class HearingCenter(EmotionModifier):
     '''modifiers with KapibaraAudio model'''
@@ -82,3 +83,48 @@ class FloorSensorModifier(EmotionModifier):
         
         if self.distance >= self.THRESHOLD:
             emotions.fear=1
+
+
+class ShockModifier(EmotionModifier):
+    '''A modifier that use gyroscope and accelerometer data to detect drag'''
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_time=0
+        self.gyroscope=np.zeros(3,dtype=np.float32)
+        self.last_gyroscope=np.zeros(3,dtype=np.float32)
+        self.acceleration=np.zeros(3,dtype=np.float32)
+        self.last_acceleration=np.zeros(3,dtype=np.float32)
+
+        self.GYRO_THRESHOLD=100
+        self.ACCEL_THRESHOLD=100
+
+    def retriveData(self, data: dict):
+        try:
+            self.gyroscope=np.array(data["Gyroscope"]["gyroscope"],dtype=np.float32)
+            self.acceleration=np.array(data["Gyroscope"]["acceleration"],dtype=np.float32)
+        except:
+            print("Cannot retrive data from IMU!")
+
+    def modify(self, emotions: EmotionTuple):
+
+        self.time=time.time_ns()
+
+        if self.last_time==0:
+            self.last_time=time.time()
+
+        if np.mean(self.last_gyroscope)>0:
+            drag=np.subtract(self.last_gyroscope,self.gyroscope,dtype=np.float32)/(self.time-self.last_time)
+
+            if np.mean(drag)>self.GYRO_THRESHOLD:
+                emotions.anger=1
+
+        if np.mean(self.last_acceleration)>0:
+            drag=np.subtract(self.last_acceleration,self.acceleration,dtype=np.float32)/(self.time-self.last_time)
+
+            if np.mean(drag)>self.ACCEL_THRESHOLD:
+                emotions.fear=1
+        
+        self.last_gyroscope=self.gyroscope
+        self.last_acceleration=self.acceleration
+
+        self.last_time=self.time
