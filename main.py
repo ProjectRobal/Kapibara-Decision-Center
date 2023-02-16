@@ -11,50 +11,13 @@ https://pygad.readthedocs.io/en/latest/README_pygad_kerasga_ReadTheDocs.html#exa
 '''
 
 import network.client as client
-from kapibara_audio import KapibaraAudio,BUFFER_SIZE
 from _grpc.rc_service_pb2 import _None,Motor,DistanceSensor,Gyroscope,Servo,AudioChunk,Command,Message
 import numpy as np
 
 import behavior
 from emotions import EmotionModifier,EmotionTuple
 
-class HearingCenter(EmotionModifier):
-    def __init__(self) -> None:
-        self.hearing=KapibaraAudio('./hearing')
-        self.audio=np.zeros(BUFFER_SIZE,np.int16)
-        # a vector of x/m where x is mean value of channel and m is mean value of added signals
-        #self.coefficient=(0,0)
-    
-    def retriveData(self,data:dict):
-        try:
-            '''get a specific data from host'''
-            left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
-            right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
-
-            self.audio:np.array=np.add(left,right,dtype=np.float32)/2
-
-            #m:float=np.mean(self.audio,dtype=np.float32)
-            #l:float=np.mean(left,dtype=np.float32)
-            #r:float=np.mean(right,dtype=np.float32)
-
-            #self.coefficient=(l/m,r/m)
-
-        except:
-            print("Audio data is missing!")
-
-
-    def modify(self,emotions:EmotionTuple):
-    
-        output=self.hearing.input(self.audio)
-
-        if output=="unsettling":
-            emotions.unsettlement=1
-        elif output=="pleasent":
-            emotions.pleasure=1
-        elif output=="scary":
-            emotions.fear=1
-        elif output=="nervous":
-            emotions.anger=1
+from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier
 
 
 data:dict = {
@@ -86,7 +49,11 @@ curr_mood:behavior.Emotion=moods["neutral"]
 # emotions holder
 emotions=EmotionTuple()
 
-modifiers:list[EmotionModifier]=[]
+modifiers:list[EmotionModifier]=[
+    HearingCenter(),
+    FrontSensorModifier("Distance_Front"),
+    FloorSensorModifier("Distance_Floor")
+]
 
 
 
@@ -104,7 +71,6 @@ def select_mood(emotions:EmotionTuple):
     #curr_mood=moods[output]
 
 
-
 def preprocess_data(msg:Message,data:dict):
     '''convert grpc message to json'''
     return client.from_message_to_json(msg,data)
@@ -117,6 +83,8 @@ with client.connect('192.168.108.216:5051') as channels:
         msg=client.send_message_data(stub,data)
 
         data=preprocess_data(msg)
+
+        emotions.clear()
 
         for mod in modifiers:
             mod.retriveData(data)
