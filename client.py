@@ -7,7 +7,7 @@ from scipy.signal import butter,filtfilt
 from kapibara_audio import KapibaraAudio
 from microphone import Microphone
 
-import emotions
+import behavior
 
 mic=Microphone(chunk=16000)
 
@@ -44,14 +44,14 @@ data:dict = {
 
 
 moods:dict={
-    "neutral":emotions.Neutral(data["Servos"]),
-    "unsettling":emotions.Unsettlment(data["Servos"]),
-    "pleasent":emotions.Pleasure(data["Servos"]),
-    "scary":emotions.Fear(data["Servos"]),
-    "nervous":emotions.Anger(data["Servos"])
+    "neutral":behavior.Neutral(data["Servos"]),
+    "unsettling":behavior.Unsettlment(data["Servos"]),
+    "pleasent":behavior.Pleasure(data["Servos"]),
+    "scary":behavior.Fear(data["Servos"]),
+    "nervous":behavior.Anger(data["Servos"])
 }
 
-curr_mood:emotions.Emotion=moods["neutral"]
+curr_mood:behavior.Emotion=moods["neutral"]
 
 
 def select_mood(output):

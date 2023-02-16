@@ -1,85 +1,39 @@
-import time
 
 
-class Emotion:
-    '''servos - a reference to servos channels'''
-    def __init__(self,servos):
-        self._servos = servos
+class EmotionTuple:
+    '''A class that will hold all emotion coefficients,
+    each variable has range <0,1>'''
+    def __init__(self) -> None:
+        self.fear=0.0
+        self.anger=0.0
+        self.pleasure=0.0
+        self.unsettlement=0.0
+        self.last_estimation=0.0
 
-    def servo1(self,pwm=None):
-        if pwm is None:
-            return self._servos["pwm1"]
+    def get_list(self) ->list[float]:
+        return [self.unsettlement,self.pleasure,self.fear,self.anger]
+    
+    def estimate(self)->float:
+        '''A function that will be used in genetic algorithm for flatten function'''
+        estimation=(self.pleasure*10)-(self.fear*5)-(self.anger*2)-(self.unsettlement*1)
+        
+        return estimation
+    
+    def clear(self):
+        self.fear=0.0
+        self.anger=0.0
+        self.pleasure=0.0
+        self.unsettlement=0.0
 
-        self._servos["pwm1"] = pwm
 
-    def servo2(self,pwm=None):
-        if pwm is None:
-            return self._servos["pwm2"]
-
-        self._servos["pwm2"] = pwm
-
-    def loop(self):
+class EmotionModifier:
+    '''A base class for emotion modification base on specific sensor'''
+    def __init__(self) -> None:
         pass
 
+    def retriveData(self,data:dict):
+        '''get a specific data from host'''
+        pass
 
-class Neutral(Emotion):
-    def __init__(self,servos):
-        super().__init__(servos)
-
-    def loop(self):
-        self.servo1(90)
-        self.servo2(90)
-
-
-class Unsettlment(Emotion):
-    def __init__(self,servos):
-        super().__init__(servos)
-
-    def loop(self):
-        self.servo1(105)
-        self.servo2(105)
-
-class Pleasure(Emotion):
-    def __init__(self,servos):
-        super().__init__(servos)
-        self.last=time.time_ns()/1000
-        self.shrung=False
-
-    def loop(self):
-        if self.shrung:
-            self.servo1(180)
-            self.servo2(180)
-        else:
-            self.servo1(90)
-            self.servo2(90)
-
-        if time.time_ns()/1000-self.last >= 100:
-            self.shrung=not self.shrung
-            self.last=time.time_ns()/1000
-
-class Fear(Emotion):
-    def __init__(self,servos):
-        super().__init__(servos)
-        self.last=time.time_ns()/1000
-        self.shrung=False
-
-    def loop(self):
-
-        if self.shrung:
-            self.servo1(10)
-            self.servo2(10)
-        else:
-            self.servo1(5)
-            self.servo2(5)
-
-        if time.time_ns()/1000-self.last >= 100:
-            self.shrung=not self.shrung
-            self.last=time.time_ns()/1000
-
-class Anger(Emotion):
-    def __init__(self,servos):
-        super().__init__(servos)
-
-    def loop(self):
-        self.servo1(135)
-        self.servo2(135)
+    def modify(self,emotions:EmotionTuple):
+        raise NotImplementedError()

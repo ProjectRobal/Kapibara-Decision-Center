@@ -162,7 +162,7 @@ class KapibaraAudio:
         return self.answers[tf.argmax(prediction.numpy()[0])]
 
     '''audio - raw audio input'''
-    def input(self,audio):
+    def input(self,audio:np.array):
 
         if audio.shape[0]<BUFFER_SIZE:
             zeros=tf.zeros(BUFFER_SIZE-audio.shape[0])

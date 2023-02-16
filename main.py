@@ -11,39 +11,50 @@ https://pygad.readthedocs.io/en/latest/README_pygad_kerasga_ReadTheDocs.html#exa
 '''
 
 import network.client as client
-from kapibara_audio import KapibaraAudio
+from kapibara_audio import KapibaraAudio,BUFFER_SIZE
 from _grpc.rc_service_pb2 import _None,Motor,DistanceSensor,Gyroscope,Servo,AudioChunk,Command,Message
+import numpy as np
 
-import emotions
+import behavior
+from emotions import EmotionModifier,EmotionTuple
 
-class EmotionTuple:
-    '''A class that will hold all emotion coefficients,
-    each variable has range <0,1>'''
+class HearingCenter(EmotionModifier):
     def __init__(self) -> None:
-        self.fear=0.0
-        self.sadness=0.0
-        self.pleasure=0.0
-        self.unsettlement=0.0
-        self.last_estimation=0.0
+        self.hearing=KapibaraAudio('./hearing')
+        self.audio=np.zeros(BUFFER_SIZE,np.int16)
+        # a vector of x/m where x is mean value of channel and m is mean value of added signals
+        #self.coefficient=(0,0)
     
-    def estimate(self)->float:
-        '''A function that will be used in genetic algorithm for flatten function'''
-        estimation=(self.pleasure*10)-(self.fear*5)-(self.sadness*2)-(self.unsettlement*1)
-        
-        return estimation
+    def retriveData(self,data:dict):
+        try:
+            '''get a specific data from host'''
+            left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
+            right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
 
+            self.audio:np.array=np.add(left,right,dtype=np.float32)/2
 
-class EmotionModifier:
-    '''A base class for emotion modification base on specific sensor'''
-    def __init__(self) -> None:
-        pass
+            #m:float=np.mean(self.audio,dtype=np.float32)
+            #l:float=np.mean(left,dtype=np.float32)
+            #r:float=np.mean(right,dtype=np.float32)
 
-    def retriveData(self,data):
-        '''get a specific data from host'''
-        pass
+            #self.coefficient=(l/m,r/m)
+
+        except:
+            print("Audio data is missing!")
+
 
     def modify(self,emotions:EmotionTuple):
-        raise NotImplementedError()
+    
+        output=self.hearing.input(self.audio)
+
+        if output=="unsettling":
+            emotions.unsettlement=1
+        elif output=="pleasent":
+            emotions.pleasure=1
+        elif output=="scary":
+            emotions.fear=1
+        elif output=="nervous":
+            emotions.anger=1
 
 
 data:dict = {
@@ -61,22 +72,36 @@ data:dict = {
     }
 }
 
-moods:dict={
-    "neutral":emotions.Neutral(data["Servos"]),
-    "unsettling":emotions.Unsettlment(data["Servos"]),
-    "pleasent":emotions.Pleasure(data["Servos"]),
-    "scary":emotions.Fear(data["Servos"]),
-    "nervous":emotions.Anger(data["Servos"])
-}
+moods:list=[
+    behavior.Neutral(data["Servos"]),
+    behavior.Unsettlment(data["Servos"]),
+    behavior.Pleasure(data["Servos"]),
+    behavior.Fear(data["Servos"]),
+    behavior.Anger(data["Servos"])
+]
 
-curr_mood:emotions.Emotion=moods["neutral"]
+# curr machine mood used to drive servo ears
+curr_mood:behavior.Emotion=moods["neutral"]
 
-def select_mood(output):
+# emotions holder
+emotions=EmotionTuple()
+
+modifiers:list[EmotionModifier]=[]
+
+
+
+def select_mood(emotions:EmotionTuple):
     global curr_mood
-    curr_mood=moods[output]
+    list:list[float]=emotions.get_list()
 
+    # neutral if no emotions is dominating
+    if np.var(list) < 0.02:
+        curr_mood=moods[0]
 
-hearing=KapibaraAudio('./hearing')
+    index:int=np.argmax(list)
+
+    curr_mood=moods[index+1]
+    #curr_mood=moods[output]
 
 
 
@@ -85,27 +110,32 @@ def preprocess_data(msg:Message,data:dict):
     return client.from_message_to_json(msg,data)
 
 
-
 with client.connect('192.168.108.216:5051') as channels:
     stub=client.get_stub(channels)
     
     while True:
-        msg=client.send_message(stub,data)
+        msg=client.send_message_data(stub,data)
 
-        data=preprocess_data(data)
+        data=preprocess_data(msg)
+
+        for mod in modifiers:
+            mod.retriveData(data)
+
+        for mod in modifiers:
+            mod.modify(emotions)
+
         #audio=mic.record(2)/32767.0
 
         #audio=filtfilt(b,a,audio)
 
         #audio=tf.cast(audio,dtype=tf.float32)
 
-        output=hearing.input(msg.left)
         #output="nervous"
 
-        select_mood(output)
+        #select_mood(output)
 
         curr_mood.loop()
-        print(output)
+        #print(output)
 
         print("Send Command!")
         msg=client.send_message_data(stub,data)

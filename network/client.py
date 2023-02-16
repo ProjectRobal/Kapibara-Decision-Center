@@ -39,15 +39,15 @@ def from_message_to_json(msg:Message,input:dict={})->dict:
         "distance":front.distance
     }
     output["Distance_Floor"]={
-        "distance":front.distance
+        "distance":floor.distance
     }
     output["Gyroscope"]={
         "acceleration":np.array(gyroscope.acceleration),
         "gyroscope":np.array(gyroscope.gyroscope)
     }
     output["Ears"]={
-        "channel1":np.array(left.data),
-        "channel2":np.array(right.data)
+        "channel1":np.array(left.data,np.int16),
+        "channel2":np.array(right.data,np.int16)
     }
 
     return output
