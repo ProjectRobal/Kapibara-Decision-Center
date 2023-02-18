@@ -1,9 +1,15 @@
+import pygad.kerasga
 import pygad
+
 
 import numpy as np
 from kapibara_audio import BUFFER_SIZE
 from emotions import EmotionTuple
 
+import tensorflow as tf
+
+from tensorflow.keras import layers
+from tensorflow.keras import models
 
 class MindOutputs:
     def __init__(self,speedA=0,speedB=0,directionA=0,directionB=0) -> None:
@@ -40,7 +46,7 @@ class Mind:
     '''
     
 
-    def __init__(self,emotions:EmotionTuple,fitness:function) -> None:
+    def __init__(self,emotions:EmotionTuple,fitness) -> None:
         self.last_outputs=np.array([MindOutputs]*10,dtype=MindOutputs)
 
         self.gyroscope=np.zeros(3,dtype=np.float32)
@@ -58,19 +64,80 @@ class Mind:
         self.fitness=fitness
 
 
+    def get_weights(self):
+        weights=np.array([],dtype=np.float32)
+
+        for layer in self.model.layers:
+            print(*layer.weights)
+            weights=np.append(weights,np.array(layer.weights))
+
+        return weights
+    
+    def model_size(self):
+        size=0
+        for layer in self.model.layers:
+            size+=len(layer.get_weights())
+
+        return size
+    
+    def set_weights(self,weights:np.array):
+        i=0
+        for layer in self.model.layers:
+            l=len(layer.get_weights())
+            w=weights[i:l]
+
+            layer.set_weights(w.reshape(layer.get_weights().shape()))
+
+            i=i+l
+
+
     def init_model(self):
-        self.ga_instance:pygad.GA=pygad.GA(num_generations=self.NUM_GENERATIONS,
-                       num_parents_mating=10,
-                       fitness_func=self.fitness,
-                       sol_per_pop=8,
-                       num_genes=len(self.inputs),
-                       init_range_low=-5,
-                       init_range_high=10,
-                       parent_selection_type="sss",
-                       keep_parents=4,
-                       crossover_type="single_point",
-                       mutation_type="random",
-                       mutation_percent_genes=10)
+
+        input=layers.Input(shape=len(self.inputs))
+
+        layer_1=layers.Dense(512,activation="relu")(input)
+
+        layer_2=layers.Dense(386,activation="relu")(layer_1)
+
+        layer_out1_1=layers.Dense(256,activation="relu")(layer_2)
+
+        layer_out1_2=layers.Dense(128,activation="relu")(layer_out1_1)
+
+        layer_out1_3=layers.Dense(64,activation="relu")(layer_out1_2)
+
+
+        output_1_speed=layers.Dense(1,activation="relu")(layer_out1_3)
+        output_1_direction=layers.Dense(1,activation="relu")(layer_out1_3)
+
+
+        layer_out2_1=layers.Dense(256,activation="relu")(layer_2)
+
+        layer_out2_2=layers.Dense(128,activation="relu")(layer_out2_1)
+
+        layer_out2_3=layers.Dense(64,activation="relu")(layer_out2_2)
+
+        output_2_speed=layers.Dense(1,activation="relu")(layer_out2_3)
+        output_2_direction=layers.Dense(1,activation="relu")(layer_out2_3)
+
+
+        self.model=models.Model(inputs=[input],outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
+
+        self.keras_ga=pygad.kerasga.KerasGA(model=self.model,
+                                      num_solutions=10)
+
+        initial_population=self.keras_ga.population_weights
+
+        #print(initial_population)
+
+        self.mind=pygad.GA(num_generations=100,
+                           num_parents_mating=5,
+                           initial_population=initial_population,
+                           fitness_func=self.fitness)
+
+    def loop(self):
+        
+        if self.mind.active():
+            self.mind.evolve(5)
 
     def getData(self,data:dict):
         
@@ -115,7 +182,12 @@ class Mind:
             for x in put:
                 self.inputs[8+i+l]=x
                 i=i+1
+
+    
+    def push_output(self,output:MindOutputs):
         
+        self.last_outputs=np.roll(self.last_outputs,-1)
+        self.last_outputs[-1]=output
 
     def loop(self):
         
@@ -127,3 +199,5 @@ class Mind:
 
         prediction = np.sum(np.array(self.inputs)*solution)
         print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
+
+        self.ga_instance.save("./mind.kdm")

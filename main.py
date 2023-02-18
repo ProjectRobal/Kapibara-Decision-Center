@@ -8,6 +8,9 @@ The workflow:
     update outputs
 
 https://pygad.readthedocs.io/en/latest/README_pygad_kerasga_ReadTheDocs.html#examples
+
+I am going to use EasyGA instead
+
 '''
 
 import network.client as client
@@ -45,7 +48,7 @@ moods:list=[
 ]
 
 # curr machine mood used to drive servo ears
-curr_mood:behavior.Emotion=moods["neutral"]
+curr_mood:behavior.Emotion=moods[0]
 
 # emotions holder
 emotions=EmotionTuple()
@@ -58,11 +61,12 @@ modifiers:list[EmotionModifier]=[
 ]
 
 
-mind=Mind(emotions)
+mind=Mind(emotions,lambda x,y:print(x))
 
 
 mind.init_model()
 
+exit()
 
 def select_mood(emotions:EmotionTuple):
     global curr_mood
@@ -87,7 +91,26 @@ with client.connect('192.168.108.216:5051') as channels:
     stub=client.get_stub(channels)
 
     def fitness_func(solution, solution_idx):
-        pass
+        msg=client.send_message_data(stub,data)
+
+        data=preprocess_data(msg)
+
+        emotions.clear()
+
+        for mod in modifiers:
+            mod.retriveData(data)
+
+        for mod in modifiers:
+            mod.modify(emotions)
+
+        select_mood(emotions)
+
+        mind.getData(data)
+
+        mind.prepareInput()
+
+
+        return emotions.estimate()
     
     while True:
         msg=client.send_message_data(stub,data)
@@ -111,5 +134,5 @@ with client.connect('192.168.108.216:5051') as channels:
         mind.loop()
 
         print("Send Command!")
-        msg=client.send_message_data(stub,data)
+        #msg=client.send_message_data(stub,data)
         #print(msg)
