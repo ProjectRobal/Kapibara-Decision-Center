@@ -22,7 +22,7 @@ from emotions import EmotionModifier,EmotionTuple
 
 from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier,ShockModifier
 
-from mind import Mind
+from mind import Mind,MindOutputs
 
 data:dict = {
     "Motors":
@@ -61,12 +61,7 @@ modifiers:list[EmotionModifier]=[
 ]
 
 
-mind=Mind(emotions,lambda x,y:print(x))
-
-
-mind.init_model()
-
-exit()
+#exit()
 
 def select_mood(emotions:EmotionTuple):
     global curr_mood
@@ -87,13 +82,26 @@ def preprocess_data(msg:Message,data:dict):
     return client.from_message_to_json(msg,data)
 
 
+def placeholder_data(data:dict):
+
+    front:DistanceSensor=DistanceSensor(distance=500)
+    floor:DistanceSensor=DistanceSensor(distance=5)
+    gyroscope:Gyroscope=Gyroscope(acceleration=[0,0,0],gyroscope=[0,0,0],accel_range=[2**16 -1],gyro_range=[2**16 -1])
+    left:AudioChunk=AudioChunk(data=[0]*32000)
+    right:AudioChunk=AudioChunk(data=[0]*32000)
+
+    msg=Message(front=front,floor=floor,gyroscope=gyroscope,left=left,right=right,status=0,message="")
+
+    return client.from_message_to_json(msg,data)
+
 with client.connect('192.168.108.216:5051') as channels:
+#if True:
     stub=client.get_stub(channels)
 
     def fitness_func(solution, solution_idx):
+        global mind,data
         msg=client.send_message_data(stub,data)
-
-        data=preprocess_data(msg)
+        #data=placeholder_data(data)
 
         emotions.clear()
 
@@ -106,33 +114,24 @@ with client.connect('192.168.108.216:5051') as channels:
         select_mood(emotions)
 
         mind.getData(data)
+        
+        predictions=mind.run_model(solution)
 
-        mind.prepareInput()
+        print("Output: ")
+        print(predictions)
 
+        output=MindOutputs()
 
-        return emotions.estimate()
+        output.set_from_norm(predictions[0],predictions[2],predictions[1],predictions[3])
+
+        err=output.error()
+
+        mind.push_output(output)
+
+        return emotions.estimate()+err
     
-    while True:
-        msg=client.send_message_data(stub,data)
+    mind=Mind(emotions,fitness_func)
 
-        data=preprocess_data(msg)
-
-        emotions.clear()
-
-        for mod in modifiers:
-            mod.retriveData(data)
-
-        for mod in modifiers:
-            mod.modify(emotions)
-
-        select_mood(emotions)
-
-        curr_mood.loop()
-
-        mind.getData(data)
-
-        mind.loop()
-
-        print("Send Command!")
-        #msg=client.send_message_data(stub,data)
-        #print(msg)
+    mind.init_model()
+    
+    mind.loop()

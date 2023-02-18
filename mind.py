@@ -12,16 +12,38 @@ from tensorflow.keras import layers
 from tensorflow.keras import models
 
 class MindOutputs:
-    def __init__(self,speedA=0,speedB=0,directionA=0,directionB=0) -> None:
+    def __init__(self,speedA:int=0,speedB:int=0,directionA:int=0,directionB:int=0) -> None:
         self.speedA=speedA
         self.directionA=directionA
 
         self.speedB=speedB
         self.directionB=directionB
 
+    def error(self)->float:
+        error=0
+
+        if self.speedA>100:
+            error-=50*(self.speedA/100.0)
+        if self.speedB>100:
+            error-=50*(self.speedB/100.0)
+        if self.directionA>3:
+            error-=50*(self.directionA/3.0)
+        if self.directionB>3:
+            error-=50*(self.directionB/3.0)
+
+        return error
+
     def get(self)->list[float]:
         return [self.speedA,self.speedB,self.directionA,self.directionB]
-
+    
+    def get_norm(self)->list[float]:
+        return [self.speedA/100.0,self.speedB/100.0,self.directionA/3.0,self.directionB/3.0]
+    
+    def set_from_norm(self,speedA,speedB,directionA,directionB):
+        self.speedA=speedA*100
+        self.speedB=speedB*100
+        self.directionA=directionA*3
+        self.directionB=directionB*3
 
 class Mind:
     OUTPUTS_BUFFER=10
@@ -47,7 +69,7 @@ class Mind:
     
 
     def __init__(self,emotions:EmotionTuple,fitness) -> None:
-        self.last_outputs=np.array([MindOutputs]*10,dtype=MindOutputs)
+        self.last_outputs=np.array([MindOutputs(0,0,0,0)]*10)
 
         self.gyroscope=np.zeros(3,dtype=np.float32)
         self.accelerometer=np.zeros(3,dtype=np.float32)
@@ -59,68 +81,43 @@ class Mind:
         self.emotions=emotions
 
         self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+len(self.audio)+
-                               len(self.audio_coff)+len(self.last_outputs),dtype=np.float32)
+                               len(self.audio_coff)+(len(self.last_outputs)*4),dtype=np.float32)
+        
+        #self.inputs=self.inputs.reshape(len(self.inputs),1)
         
         self.fitness=fitness
-
-
-    def get_weights(self):
-        weights=np.array([],dtype=np.float32)
-
-        for layer in self.model.layers:
-            print(*layer.weights)
-            weights=np.append(weights,np.array(layer.weights))
-
-        return weights
     
-    def model_size(self):
-        size=0
-        for layer in self.model.layers:
-            size+=len(layer.get_weights())
-
-        return size
-    
-    def set_weights(self,weights:np.array):
-        i=0
-        for layer in self.model.layers:
-            l=len(layer.get_weights())
-            w=weights[i:l]
-
-            layer.set_weights(w.reshape(layer.get_weights().shape()))
-
-            i=i+l
-
 
     def init_model(self):
 
-        input=layers.Input(shape=len(self.inputs))
+        input=layers.Input(len(self.inputs))
 
-        layer_1=layers.Dense(512,activation="relu")(input)
+        layer_1=layers.Dense(512,activation="linear")(input)
 
-        layer_2=layers.Dense(386,activation="relu")(layer_1)
+        layer_2=layers.Dense(386,activation="linear")(layer_1)
 
-        layer_out1_1=layers.Dense(256,activation="relu")(layer_2)
+        layer_out1_1=layers.Dense(256,activation="linear")(layer_2)
 
-        layer_out1_2=layers.Dense(128,activation="relu")(layer_out1_1)
+        layer_out1_2=layers.Dense(128,activation="linear")(layer_out1_1)
 
-        layer_out1_3=layers.Dense(64,activation="relu")(layer_out1_2)
+        layer_out1_3=layers.Dense(64,activation="linear")(layer_out1_2)
 
 
         output_1_speed=layers.Dense(1,activation="relu")(layer_out1_3)
         output_1_direction=layers.Dense(1,activation="relu")(layer_out1_3)
 
 
-        layer_out2_1=layers.Dense(256,activation="relu")(layer_2)
+        layer_out2_1=layers.Dense(256,activation="linear")(layer_2)
 
-        layer_out2_2=layers.Dense(128,activation="relu")(layer_out2_1)
+        layer_out2_2=layers.Dense(128,activation="linear")(layer_out2_1)
 
-        layer_out2_3=layers.Dense(64,activation="relu")(layer_out2_2)
+        layer_out2_3=layers.Dense(64,activation="linear")(layer_out2_2)
 
         output_2_speed=layers.Dense(1,activation="relu")(layer_out2_3)
         output_2_direction=layers.Dense(1,activation="relu")(layer_out2_3)
 
 
-        self.model=models.Model(inputs=[input],outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
+        self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
 
         self.keras_ga=pygad.kerasga.KerasGA(model=self.model,
                                       num_solutions=10)
@@ -129,15 +126,24 @@ class Mind:
 
         #print(initial_population)
 
-        self.mind=pygad.GA(num_generations=100,
+        self.mind=pygad.GA(num_generations=10,
                            num_parents_mating=5,
                            initial_population=initial_population,
                            fitness_func=self.fitness)
-
-    def loop(self):
         
-        if self.mind.active():
-            self.mind.evolve(5)
+    def run_model(self,solutions):
+
+        self.prepareInput()
+
+        predictions=pygad.kerasga.predict(model=self.model,
+                        solution=solutions,
+                        data=self.inputs.reshape(1,len(self.inputs)))
+        
+
+                
+        return predictions
+        
+        
 
     def getData(self,data:dict):
         
@@ -149,10 +155,14 @@ class Mind:
 
         self.audio:np.array=np.add(left,right,dtype=np.float32)/2
 
-        m=np.mean(self.audio)
+        m:float=np.mean(self.audio)
 
-        l=np.mean(left)
-        r=np.mean(right)
+        l:float=np.mean(left)
+        r:float=np.mean(right)
+
+        if m==0:
+            self.audio_coff=(0,0)
+            return
 
         self.audio_coff=(l/m,r/m)
 
@@ -178,7 +188,7 @@ class Mind:
         l=len(self.audio)
 
         for out in self.last_outputs:
-            put=out.get()
+            put=out.get_norm()
             for x in put:
                 self.inputs[8+i+l]=x
                 i=i+1
@@ -191,13 +201,13 @@ class Mind:
 
     def loop(self):
         
-        self.ga_instance.run()
+        self.mind.run()
 
-        solution, solution_fitness, solution_idx = self.ga_instance.best_solution()
+        solution, solution_fitness, solution_idx = self.mind.best_solution()
         print("Parameters of the best solution : {solution}".format(solution=solution))
         print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
 
         prediction = np.sum(np.array(self.inputs)*solution)
         print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
 
-        self.ga_instance.save("./mind.kdm")
+        self.mind.save("./mind.kdm")
