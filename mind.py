@@ -146,7 +146,7 @@ class Mind:
         self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
 
         self.keras_ga=pygad.kerasga.KerasGA(model=self.model,
-                                      num_solutions=10)
+                                      num_solutions=5)
 
         initial_population=self.keras_ga.population_weights
 
@@ -155,7 +155,14 @@ class Mind:
         self.mind=pygad.GA(num_generations=10,
                            num_parents_mating=5,
                            initial_population=initial_population,
-                           fitness_func=self.fitness)
+                           fitness_func=self.fitness,
+                           init_range_high=10,
+                           init_range_low=-5,
+                           parent_selection_type="sss",
+                           crossover_type="single_point",
+                           mutation_type="random",
+                           mutation_percent_genes= 10
+                           )
         
     def run_model(self,solutions):
 

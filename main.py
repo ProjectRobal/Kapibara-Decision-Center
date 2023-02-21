@@ -135,9 +135,11 @@ with client.connect('127.0.0.1:5051') as channels:
         data["Motors"]["directionA"]=output.motor1()[1]
         data["Motors"]["directionB"]=output.motor2()[1]
 
-        
+        est=emotions.estimate()+err
 
-        return emotions.estimate()+err
+        print("Estimation: ",est)
+
+        return est
     
     mind=Mind(emotions,fitness_func)
 
