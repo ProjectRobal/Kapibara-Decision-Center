@@ -12,6 +12,9 @@ from tensorflow.keras import layers
 from tensorflow.keras import models
 
 class MindOutputs:
+
+    MAX_INPUT_VALUE=4294967295.0
+
     def __init__(self,speedA:int=0,speedB:int=0,directionA:int=0,directionB:int=0) -> None:
         self.speedA=speedA
         self.directionA=directionA
@@ -39,17 +42,30 @@ class MindOutputs:
     def get_norm(self)->list[float]:
         return [self.speedA/100.0,self.speedB/100.0,self.directionA/3.0,self.directionB/3.0]
     
-    def set_from_norm(self,speedA,speedB,directionA,directionB):
+    def set_from_norm(self,speedA:float,speedB:float,directionA:float,directionB:float):
+
         self.speedA=speedA*100
         self.speedB=speedB*100
         self.directionA=directionA*3
         self.directionB=directionB*3
 
-    def motor1(self):
-        return (self.speedA,self.directionA)
+        if self.speedA>self.MAX_INPUT_VALUE:
+            self.speedA=self.MAX_INPUT_VALUE
+
+        if self.speedB>self.MAX_INPUT_VALUE:
+            self.speedB=self.MAX_INPUT_VALUE
+
+        if self.directionA>self.MAX_INPUT_VALUE:
+            self.directionA=self.MAX_INPUT_VALUE
+
+        if self.directionB>self.MAX_INPUT_VALUE:
+            self.directionB=self.MAX_INPUT_VALUE
+
+    def motor1(self)->tuple[int,int]:
+        return (int(self.speedA),int(self.directionA))
     
-    def motor2(self):
-        return (self.speedB,self.directionB)
+    def motor2(self)->tuple[int,int]:
+        return (int(self.speedB),int(self.directionB))
 
 class Mind:
     OUTPUTS_BUFFER=10
@@ -80,6 +96,10 @@ class Mind:
         self.gyroscope=np.zeros(3,dtype=np.float32)
         self.accelerometer=np.zeros(3,dtype=np.float32)
 
+        self.dis_front=0.0
+
+        self.dis_floor=0.0
+
         self.audio=np.zeros(BUFFER_SIZE,dtype=np.float32)
 
         self.audio_coff=(0,0)
@@ -87,7 +107,7 @@ class Mind:
         self.emotions=emotions
 
         self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+len(self.audio)+
-                               len(self.audio_coff)+(len(self.last_outputs)*4),dtype=np.float32)
+                               len(self.audio_coff)+(len(self.last_outputs)*4)+2,dtype=np.float32)
         
         #self.inputs=self.inputs.reshape(len(self.inputs),1)
         
@@ -155,6 +175,10 @@ class Mind:
         self.gyroscope:np.array=data["Gyroscope"]["gyroscope"]/(2**16 -1)
         self.accelerometer:np.array=data["Gyroscope"]["acceleration"]/(2**16 -1)
 
+        self.dis_front=data["Distance_Front"]["distance"]/8160.0
+
+        self.dis_floor=data["Distance_Floor"]["distance"]/8160.0
+
         left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
         right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
 
@@ -164,6 +188,11 @@ class Mind:
 
         l:float=np.mean(left)
         r:float=np.mean(right)
+
+        print(self.gyroscope)
+        print(self.accelerometer)
+        print(self.dis_front)
+        print(self.dis_floor)
 
         if m==0:
             self.audio_coff=(0.0,0.0)
@@ -183,10 +212,13 @@ class Mind:
         self.inputs[6]=self.audio_coff[0]
         self.inputs[7]=self.audio_coff[1]
 
+        self.inputs[8]=self.dis_front
+        self.inputs[9]=self.dis_floor
+
         i=0
 
         for samp in self.audio:
-            self.inputs[8+i]=samp 
+            self.inputs[10+i]=samp 
             i=i+1
 
         i=0
@@ -195,7 +227,7 @@ class Mind:
         for out in self.last_outputs:
             put=out.get_norm()
             for x in put:
-                self.inputs[8+i+l]=x
+                self.inputs[10+i+l]=x
                 i=i+1
 
     

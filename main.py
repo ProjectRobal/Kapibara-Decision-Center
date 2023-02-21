@@ -118,20 +118,24 @@ with client.connect('127.0.0.1:5051') as channels:
         predictions=mind.run_model(solution)
 
         print("Output: ")
-        print(predictions)
+        #print(predictions)
+
+        print(predictions[0]," ",predictions[2]," ",predictions[1]," ",predictions[3])
 
         output=MindOutputs()
 
-        output.set_from_norm(predictions[0],predictions[2],predictions[1],predictions[3])
+        output.set_from_norm(predictions[0][0][0],predictions[2][0][0],predictions[1][0][0],predictions[3][0][0])
 
         err=output.error()
 
         mind.push_output(output)
 
-        data["Motors"]["speedA"]=int(output.motor1()[0])
-        data["Motors"]["speedB"]=int(output.motor2()[0])
-        data["Motors"]["directionA"]=int(output.motor1()[1])
-        data["Motors"]["directionB"]=int(output.motor2()[1])
+        data["Motors"]["speedA"]=output.motor1()[0]
+        data["Motors"]["speedB"]=output.motor2()[0]
+        data["Motors"]["directionA"]=output.motor1()[1]
+        data["Motors"]["directionB"]=output.motor2()[1]
+
+        
 
         return emotions.estimate()+err
     
