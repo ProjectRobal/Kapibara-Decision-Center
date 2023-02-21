@@ -8,7 +8,6 @@ class EmotionTuple:
         self.anger=0.0
         self.pleasure=0.0
         self.unsettlement=0.0
-        self.last_estimation=0.0
 
     def get_list(self) ->list[float]:
         return [self.unsettlement,self.pleasure,self.fear,self.anger]
@@ -24,6 +23,9 @@ class EmotionTuple:
         self.anger=0.0
         self.pleasure=0.0
         self.unsettlement=0.0
+
+    def __str__(self) -> str:
+        return "fear: "+str(self.fear)+"\n"+"anger: "+str(self.anger)+"\n"+"pleasure: "+str(self.pleasure)+"\n""unsettlement: "+str(self.unsettlement)+"\n"
 
 
 class EmotionModifier:

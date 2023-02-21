@@ -9,7 +9,7 @@ The workflow:
 
 https://pygad.readthedocs.io/en/latest/README_pygad_kerasga_ReadTheDocs.html#examples
 
-I am going to use EasyGA instead
+Change threshold for Shock modifier
 
 '''
 
@@ -98,6 +98,11 @@ with client.connect('127.0.0.1:5051') as channels:
 #if True:
     stub=client.get_stub(channels)
 
+    def callback_generation(ga_instance):
+        print()
+        print("Generation = {generation}".format(generation=ga_instance.generations_completed))
+        print("Fitness    = {fitness}".format(fitness=ga_instance.best_solution()[1]))
+
     def fitness_func(solution, solution_idx):
         global mind,data
         msg=client.process_data(stub,data)
@@ -135,13 +140,17 @@ with client.connect('127.0.0.1:5051') as channels:
         data["Motors"]["directionA"]=output.motor1()[1]
         data["Motors"]["directionB"]=output.motor2()[1]
 
+        curr_mood.loop()
+
+        print(str(emotions))
+
         est=emotions.estimate()+err
 
         print("Estimation: ",est)
 
         return est
     
-    mind=Mind(emotions,fitness_func)
+    mind=Mind(emotions,fitness_func,callback_generation)
 
     mind.init_model()
     

@@ -90,7 +90,7 @@ class Mind:
     '''
     
 
-    def __init__(self,emotions:EmotionTuple,fitness) -> None:
+    def __init__(self,emotions:EmotionTuple,fitness,callback) -> None:
         self.last_outputs=np.array([MindOutputs(0,0,0,0)]*10)
 
         self.gyroscope=np.zeros(3,dtype=np.float32)
@@ -112,8 +112,9 @@ class Mind:
         #self.inputs=self.inputs.reshape(len(self.inputs),1)
         
         self.fitness=fitness
-    
+        self.callback=callback
 
+    
     def init_model(self):
 
         input=layers.Input(len(self.inputs))
@@ -129,8 +130,8 @@ class Mind:
         layer_out1_3=layers.Dense(64,activation="linear")(layer_out1_2)
 
 
-        output_1_speed=layers.Dense(1,activation="relu")(layer_out1_3)
-        output_1_direction=layers.Dense(1,activation="relu")(layer_out1_3)
+        output_1_speed=layers.Dense(1,activation="sigmoid")(layer_out1_3)
+        output_1_direction=layers.Dense(1,activation="sigmoid")(layer_out1_3)
 
 
         layer_out2_1=layers.Dense(256,activation="linear")(layer_2)
@@ -139,23 +140,24 @@ class Mind:
 
         layer_out2_3=layers.Dense(64,activation="linear")(layer_out2_2)
 
-        output_2_speed=layers.Dense(1,activation="relu")(layer_out2_3)
-        output_2_direction=layers.Dense(1,activation="relu")(layer_out2_3)
+        output_2_speed=layers.Dense(1,activation="sigmoid")(layer_out2_3)
+        output_2_direction=layers.Dense(1,activation="sigmoid")(layer_out2_3)
 
 
         self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
 
         self.keras_ga=pygad.kerasga.KerasGA(model=self.model,
-                                      num_solutions=5)
+                                      num_solutions=4)
 
         initial_population=self.keras_ga.population_weights
 
         #print(initial_population)
 
         self.mind=pygad.GA(num_generations=10,
-                           num_parents_mating=5,
+                           num_parents_mating=2,
                            initial_population=initial_population,
                            fitness_func=self.fitness,
+                           on_generation=self.callback,
                            init_range_high=10,
                            init_range_low=-5,
                            parent_selection_type="sss",
@@ -196,10 +198,10 @@ class Mind:
         l:float=np.mean(left)
         r:float=np.mean(right)
 
-        print(self.gyroscope)
-        print(self.accelerometer)
-        print(self.dis_front)
-        print(self.dis_floor)
+        #print(self.gyroscope)
+        #print(self.accelerometer)
+        #print(self.dis_front)
+        #print(self.dis_floor)
 
         if m==0:
             self.audio_coff=(0.0,0.0)

@@ -95,8 +95,8 @@ class ShockModifier(EmotionModifier):
         self.acceleration=np.zeros(3,dtype=np.float32)
         self.last_acceleration=np.zeros(3,dtype=np.float32)
 
-        self.GYRO_THRESHOLD=100
-        self.ACCEL_THRESHOLD=100
+        self.GYRO_THRESHOLD=400000
+        self.ACCEL_THRESHOLD=200000
 
     def retriveData(self, data: dict):
         try:
@@ -107,7 +107,7 @@ class ShockModifier(EmotionModifier):
 
     def modify(self, emotions: EmotionTuple):
 
-        self.time=time.time_ns()
+        self.time=time.time()
 
         if self.last_time==0:
             self.last_time=time.time()
@@ -116,6 +116,7 @@ class ShockModifier(EmotionModifier):
             drag=np.subtract(self.last_gyroscope,self.gyroscope,dtype=np.float32)/(self.time-self.last_time)
 
             if np.mean(drag)>self.GYRO_THRESHOLD:
+                print(np.mean(drag))
                 emotions.anger=1
 
         if np.mean(self.last_acceleration)>0:
