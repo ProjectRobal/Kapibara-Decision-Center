@@ -6,7 +6,7 @@ import numpy as np
 
 def send_message(stub,speedA,directionA,speedB,directionB,angel1,angel2):
 
-    msg=Command(mA=Motor(direction=directionA,speed=speedA),mB=Motor(direction=directionB,speed=speedB),ear1=Servo(angle=angel1),ear2=Servo(angle=angel2))
+    msg=Command(mA=Motor(direction=int(directionA),speed=int(speedA)),mB=Motor(direction=int(directionB),speed=int(speedB)),ear1=Servo(angle=int(angel1)),ear2=Servo(angle=int(angel2)))
 
     return stub.SendCommand(msg)    
 
@@ -16,7 +16,7 @@ def send_message_data(stub,data):
 
 def process(stub,speedA,directionA,speedB,directionB,angel1,angel2):
 
-    msg=Command(mA=Motor(direction=directionA,speed=speedA),mB=Motor(direction=directionB,speed=speedB),ear1=Servo(angle=angel1),ear2=Servo(angle=angel2))
+    msg=Command(mA=Motor(direction=int(directionA),speed=int(speedA)),mB=Motor(direction=int(directionB),speed=int(speedB)),ear1=Servo(angle=int(angel1)),ear2=Servo(angle=int(angel2)))
 
     return stub.Process(msg)
 
@@ -27,13 +27,12 @@ def process_data(stub,data):
 
 def from_message_to_json(msg:Message,input:dict={})->dict:
     output=input
-
+    
     front:DistanceSensor=msg.front
     floor:DistanceSensor=msg.floor
     gyroscope:Gyroscope=msg.gyroscope
     left:AudioChunk=msg.left
     right:AudioChunk=msg.right
-
 
     output["Distance_Front"]={
         "distance":front.distance

@@ -45,6 +45,12 @@ class MindOutputs:
         self.directionA=directionA*3
         self.directionB=directionB*3
 
+    def motor1(self):
+        return (self.speedA,self.directionA)
+    
+    def motor2(self):
+        return (self.speedB,self.directionB)
+
 class Mind:
     OUTPUTS_BUFFER=10
     NUM_GENERATIONS=50
@@ -138,8 +144,7 @@ class Mind:
         predictions=pygad.kerasga.predict(model=self.model,
                         solution=solutions,
                         data=self.inputs.reshape(1,len(self.inputs)))
-        
-
+    
                 
         return predictions
         
@@ -153,7 +158,7 @@ class Mind:
         left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
         right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
 
-        self.audio:np.array=np.add(left,right,dtype=np.float32)/2
+        self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
         m:float=np.mean(self.audio)
 
@@ -161,7 +166,7 @@ class Mind:
         r:float=np.mean(right)
 
         if m==0:
-            self.audio_coff=(0,0)
+            self.audio_coff=(0.0,0.0)
             return
 
         self.audio_coff=(l/m,r/m)

@@ -94,14 +94,14 @@ def placeholder_data(data:dict):
 
     return client.from_message_to_json(msg,data)
 
-with client.connect('192.168.108.216:5051') as channels:
+with client.connect('127.0.0.1:5051') as channels:
 #if True:
     stub=client.get_stub(channels)
 
     def fitness_func(solution, solution_idx):
         global mind,data
-        msg=client.send_message_data(stub,data)
-        #data=placeholder_data(data)
+        msg=client.process_data(stub,data)
+        data=preprocess_data(msg,data)
 
         emotions.clear()
 
@@ -127,6 +127,11 @@ with client.connect('192.168.108.216:5051') as channels:
         err=output.error()
 
         mind.push_output(output)
+
+        data["Motors"]["speedA"]=int(output.motor1()[0])
+        data["Motors"]["speedB"]=int(output.motor2()[0])
+        data["Motors"]["directionA"]=int(output.motor1()[1])
+        data["Motors"]["directionB"]=int(output.motor2()[1])
 
         return emotions.estimate()+err
     
