@@ -11,6 +11,8 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras import models
 
+import math
+
 class MindOutputs:
 
     MAX_INPUT_VALUE=4294967295.0
@@ -34,6 +36,15 @@ class MindOutputs:
         if self.directionB>3:
             error-=50*(self.directionB/3.0)
 
+        if math.isnan(self.speedA):
+            error-=100
+        if math.isnan(self.speedB):
+            error-=100
+        if math.isnan(self.directionA):
+            error-=100
+        if math.isnan(self.directionB):
+            error-=100
+
         return error
 
     def get(self)->list[float]:
@@ -43,6 +54,7 @@ class MindOutputs:
         return [self.speedA/100.0,self.speedB/100.0,self.directionA/3.0,self.directionB/3.0]
     
     def set_from_norm(self,speedA:float,speedB:float,directionA:float,directionB:float):
+
 
         self.speedA=speedA*100
         self.speedB=speedB*100
@@ -188,10 +200,21 @@ class Mind:
 
         self.dis_floor=data["Distance_Floor"]["distance"]/8160.0
 
-        left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
-        right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
+        left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float64)/32767
+        right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float64)/32767
 
-        self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
+        for x in left:
+            if np.isnan(x):
+                print("Nan in left")
+        for x in right:
+            if np.isnan(x):
+                print("Nan in right")
+
+        self.audio:np.array=np.add(left,right,dtype=np.float64)/2.0
+
+        for x in self.audio:
+            if np.isnan(x):
+                print("Nan in audio")
 
         m:float=np.mean(self.audio)
 
@@ -227,7 +250,7 @@ class Mind:
         i=0
 
         for samp in self.audio:
-            self.inputs[10+i]=samp 
+            self.inputs[10+i]=samp
             i=i+1
 
         i=0

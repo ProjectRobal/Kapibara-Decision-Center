@@ -49,7 +49,7 @@ message Servo
 
 message AudioChunk
 {
-    repeated uint32 data=32000;
+    repeated int32 data=32000;
     // the raw audio data
 }
 

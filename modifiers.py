@@ -15,10 +15,10 @@ class HearingCenter(EmotionModifier):
     def retriveData(self,data:dict):
         try:
             '''get a specific data from host'''
-            left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
-            right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
+            left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float64)/32767.0
+            right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float64)/32767.0
 
-            self.audio:np.array=np.add(left,right,dtype=np.float32)/2
+            self.audio:np.array=np.add(left,right,dtype=np.float64)/2.0
 
             #m:float=np.mean(self.audio,dtype=np.float32)
             #l:float=np.mean(left,dtype=np.float32)

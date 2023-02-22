@@ -45,8 +45,8 @@ def from_message_to_json(msg:Message,input:dict={})->dict:
         "gyroscope":np.array(gyroscope.gyroscope)
     }
     output["Ears"]={
-        "channel1":np.array(left.data,np.int16),
-        "channel2":np.array(right.data,np.int16)
+        "channel1":np.array(left.data,np.int32),
+        "channel2":np.array(right.data,np.int32)
     }
 
     return output
