@@ -137,9 +137,9 @@ class Mind:
 
         layer_out1_1=layers.Dense(256,activation="linear")(layer_2)
 
-        layer_out1_2=layers.Dense(128,activation="linear")(layer_out1_1)
+        layer_out1_2=layers.Dense(128,activation="sigmoid")(layer_out1_1)
 
-        layer_out1_3=layers.Dense(64,activation="linear")(layer_out1_2)
+        layer_out1_3=layers.Dense(64,activation="sigmoid")(layer_out1_2)
 
 
         output_1_speed=layers.Dense(1,activation="sigmoid")(layer_out1_3)
@@ -148,9 +148,9 @@ class Mind:
 
         layer_out2_1=layers.Dense(256,activation="linear")(layer_2)
 
-        layer_out2_2=layers.Dense(128,activation="linear")(layer_out2_1)
+        layer_out2_2=layers.Dense(128,activation="sigmoid")(layer_out2_1)
 
-        layer_out2_3=layers.Dense(64,activation="linear")(layer_out2_2)
+        layer_out2_3=layers.Dense(64,activation="sigmoid")(layer_out2_2)
 
         output_2_speed=layers.Dense(1,activation="sigmoid")(layer_out2_3)
         output_2_direction=layers.Dense(1,activation="sigmoid")(layer_out2_3)
@@ -159,21 +159,21 @@ class Mind:
         self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
 
         self.keras_ga=pygad.kerasga.KerasGA(model=self.model,
-                                      num_solutions=4)
+                                      num_solutions=2)
 
         initial_population=self.keras_ga.population_weights
 
         #print(initial_population)
 
-        self.mind=pygad.GA(num_generations=10,
+        self.mind=pygad.GA(num_generations=100,
                            num_parents_mating=2,
                            initial_population=initial_population,
                            fitness_func=self.fitness,
                            on_generation=self.callback,
                            init_range_high=10,
                            init_range_low=-5,
-                           parent_selection_type="sss",
-                           crossover_type="single_point",
+                           parent_selection_type="rank",
+                           crossover_type="scattered",
                            mutation_type="random",
                            mutation_percent_genes= 10
                            )
@@ -200,8 +200,8 @@ class Mind:
 
         self.dis_floor=data["Distance_Floor"]["distance"]/8160.0
 
-        left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float64)/32767
-        right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float64)/32767
+        left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float64)/32767.0
+        right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float64)/32767.0
 
         for x in left:
             if np.isnan(x):
@@ -276,7 +276,4 @@ class Mind:
         print("Parameters of the best solution : {solution}".format(solution=solution))
         print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
 
-        prediction = np.sum(np.array(self.inputs)*solution)
-        print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
-
-        self.mind.save("./mind.kdm")
+        self.mind.save("./mind")

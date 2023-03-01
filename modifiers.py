@@ -3,6 +3,8 @@ from kapibara_audio import KapibaraAudio,BUFFER_SIZE
 import numpy as np
 import time
 
+STEP_TIME=0.1
+
 class HearingCenter(EmotionModifier):
     '''modifiers with KapibaraAudio model'''
     def __init__(self) -> None:
@@ -113,14 +115,14 @@ class ShockModifier(EmotionModifier):
             self.last_time=time.time()
 
         if np.mean(self.last_gyroscope)>0:
-            drag=np.subtract(self.last_gyroscope,self.gyroscope,dtype=np.float32)/(self.time-self.last_time)
+            drag=np.subtract(self.last_gyroscope,self.gyroscope,dtype=np.float32)/STEP_TIME #(self.time-self.last_time)
 
             if np.mean(drag)>self.GYRO_THRESHOLD:
                 print(np.mean(drag))
                 emotions.anger=1
 
         if np.mean(self.last_acceleration)>0:
-            drag=np.subtract(self.last_acceleration,self.acceleration,dtype=np.float32)/(self.time-self.last_time)
+            drag=np.subtract(self.last_acceleration,self.acceleration,dtype=np.float32)/STEP_TIME #(self.time-self.last_time)
 
             if np.mean(drag)>self.ACCEL_THRESHOLD:
                 emotions.fear=1
