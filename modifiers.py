@@ -3,7 +3,7 @@ from kapibara_audio import KapibaraAudio,BUFFER_SIZE
 import numpy as np
 import time
 
-STEP_TIME=0.1
+STEP_TIME=0.01
 
 class HearingCenter(EmotionModifier):
     '''modifiers with KapibaraAudio model'''
@@ -51,7 +51,7 @@ class FrontSensorModifier(EmotionModifier):
         '''name - sensor name'''
         super().__init__()
         # a distance in wich robot will 'feel' pain in mm
-        self.THRESHOLD=50
+        self.THRESHOLD=300
         self.distance=0
         self.name=name
 

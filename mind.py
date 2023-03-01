@@ -12,6 +12,7 @@ from tensorflow.keras import layers
 from tensorflow.keras import models
 
 import math
+import os.path
 
 class MindOutputs:
 
@@ -51,15 +52,30 @@ class MindOutputs:
         return [self.speedA,self.speedB,self.directionA,self.directionB]
     
     def get_norm(self)->list[float]:
-        return [self.speedA/100.0,self.speedB/100.0,self.directionA/3.0,self.directionB/3.0]
+        return [self.speedA/100.0,self.speedB/100.0,self.directionA/4.0,self.directionB/4.0]
     
     def set_from_norm(self,speedA:float,speedB:float,directionA:float,directionB:float):
 
-
         self.speedA=speedA*100
         self.speedB=speedB*100
-        self.directionA=directionA*3
-        self.directionB=directionB*3
+
+        if directionA>=0 and directionA<0.25:
+            self.directionA=0
+        elif directionA>=0.25 and directionA<0.5:
+            self.directionA=1
+        elif directionA>=0.5 and directionA<0.75:
+            self.directionA=2
+        else:
+            self.directionA=3
+        
+        if directionB>=0 and directionB<0.25:
+            self.directionB=0
+        elif directionB>=0.25 and directionB<0.5:
+            self.directionB=1
+        elif directionB>=0.5 and directionB<0.75:
+            self.directionB=2
+        else:
+            self.directionB=3
 
         if self.speedA>self.MAX_INPUT_VALUE:
             self.speedA=self.MAX_INPUT_VALUE
@@ -164,6 +180,12 @@ class Mind:
         initial_population=self.keras_ga.population_weights
 
         #print(initial_population)
+
+        if os.path.isfile("./mind.pkl"):
+            self.mind=pygad.load("./mind")
+            print("Model has been loaded")
+            return
+
 
         self.mind=pygad.GA(num_generations=100,
                            num_parents_mating=2,
