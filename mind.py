@@ -7,12 +7,16 @@ from kapibara_audio import BUFFER_SIZE
 from emotions import EmotionTuple
 
 import tensorflow as tf
+import time
 
 from tensorflow.keras import layers
 from tensorflow.keras import models
 
 import math
 import os.path
+
+from timeit import default_timer as timer
+from tflitemodel import LiteModel
 
 class MindOutputs:
 
@@ -175,7 +179,7 @@ class Mind:
         self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
 
         self.keras_ga=pygad.kerasga.KerasGA(model=self.model,
-                                      num_solutions=2)
+                                      num_solutions=10)
 
         initial_population=self.keras_ga.population_weights
 
@@ -188,7 +192,7 @@ class Mind:
 
 
         self.mind=pygad.GA(num_generations=100,
-                           num_parents_mating=2,
+                           num_parents_mating=10,
                            initial_population=initial_population,
                            fitness_func=self.fitness,
                            on_generation=self.callback,
@@ -199,6 +203,24 @@ class Mind:
                            mutation_type="random",
                            mutation_percent_genes= 10
                            )
+    
+
+    def test_tflite(self):
+
+        lite=LiteModel.from_keras_model(self.model)
+
+        self.prepareInput()
+
+        print(lite.predict(self.inputs.reshape(1,len(self.inputs))))
+
+        for i in range(50):
+
+            start=timer()
+
+            print(lite.predict(self.inputs.reshape(1,len(self.inputs))))
+
+            print(timer()-start," s")
+
         
     def run_model(self,solutions):
 
@@ -207,7 +229,6 @@ class Mind:
         predictions=pygad.kerasga.predict(model=self.model,
                         solution=solutions,
                         data=self.inputs.reshape(1,len(self.inputs)))
-    
                 
         return predictions
         

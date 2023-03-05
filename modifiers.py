@@ -51,7 +51,7 @@ class FrontSensorModifier(EmotionModifier):
         '''name - sensor name'''
         super().__init__()
         # a distance in wich robot will 'feel' pain in mm
-        self.THRESHOLD=300
+        self.THRESHOLD=100
         self.distance=0
         self.name=name
 

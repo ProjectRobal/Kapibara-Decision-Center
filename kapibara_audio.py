@@ -174,7 +174,7 @@ class KapibaraAudio:
         spectrogram=self.gen_spectogram(audio)[None,...,tf.newaxis]
 
 
-        prediction = self.model(spectrogram)
+        prediction = self.model(spectrogram,training=False)
 
         return self.get_result(prediction)
 

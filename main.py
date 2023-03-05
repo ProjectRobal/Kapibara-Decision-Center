@@ -153,5 +153,7 @@ with client.connect('127.0.0.1:5051') as channels:
     mind=Mind(emotions,fitness_func,callback_generation)
 
     mind.init_model()
+
+    #mind.test_tflite()
     
     mind.loop()
