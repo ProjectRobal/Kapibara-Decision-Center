@@ -9,7 +9,7 @@ class HearingCenter(EmotionModifier):
     '''modifiers with KapibaraAudio model'''
     def __init__(self) -> None:
         super().__init__()
-        self.hearing=KapibaraAudio('./hearing')
+        self.hearing=KapibaraAudio('./hearing.tflite')
         self.audio=np.zeros(BUFFER_SIZE,np.int16)
         # a vector of x/m where x is mean value of channel and m is mean value of added signals
         #self.coefficient=(0,0)
