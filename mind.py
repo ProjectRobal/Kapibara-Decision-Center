@@ -243,8 +243,8 @@ class Mind:
 
         self.dis_floor=data["Distance_Floor"]["distance"]/8160.0
 
-        left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float64)/32767.0
-        right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float64)/32767.0
+        left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
+        right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
 
         for x in left:
             if np.isnan(x):
@@ -253,7 +253,7 @@ class Mind:
             if np.isnan(x):
                 print("Nan in right")
 
-        self.audio:np.array=np.add(left,right,dtype=np.float64)/2.0
+        self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
         for x in self.audio:
             if np.isnan(x):
