@@ -24,10 +24,13 @@ from numba.experimental import jitclass
 DISTANCE_MAX_VAL=2048.0 # in mm
 MAX_ANGEL=360.0
 
-
+@jitclass([
+    ('speedA', float32),         
+    ('directionA', float32),
+    ('speedB', float32),         
+    ('directionB', float32)
+])
 class MindOutputs:
-
-    MAX_INPUT_VALUE=4294967295.0
 
     def __init__(self,speedA:int=0,speedB:int=0,directionA:int=0,directionB:int=0) -> None:
         self.speedA=speedA
@@ -88,17 +91,6 @@ class MindOutputs:
         else:
             self.directionB=3
 
-        if self.speedA>self.MAX_INPUT_VALUE:
-            self.speedA=self.MAX_INPUT_VALUE
-
-        if self.speedB>self.MAX_INPUT_VALUE:
-            self.speedB=self.MAX_INPUT_VALUE
-
-        if self.directionA>self.MAX_INPUT_VALUE:
-            self.directionA=self.MAX_INPUT_VALUE
-
-        if self.directionB>self.MAX_INPUT_VALUE:
-            self.directionB=self.MAX_INPUT_VALUE
 
     def motor1(self)->tuple[int,int]:
         return (int(self.speedA),int(self.directionA))
@@ -106,9 +98,9 @@ class MindOutputs:
     def motor2(self)->tuple[int,int]:
         return (int(self.speedB),int(self.directionB))
 
+
+
 class Mind:
-    OUTPUTS_BUFFER=10
-    NUM_GENERATIONS=50
 
     '''A class that represents decision model
     A inputs: 
@@ -127,7 +119,6 @@ class Mind:
     Outputs:
 
     '''
-    
 
     def __init__(self,emotions:EmotionTuple,number_of_weights_to_mutate=10) -> None:
         self.last_outputs=np.array([MindOutputs(0,0,0,0)]*10)
