@@ -186,7 +186,7 @@ class Mind:
         '''A function to mutate a model'''
         n_layers=len(self.model.layers)
 
-        layer_id=np.random.randint(low=0,high=n_layers-1)
+        layer_id=np.random.randint(low=0,high=n_layers-2)+1
 
         layer=self.model.get_layer(index=layer_id)
 

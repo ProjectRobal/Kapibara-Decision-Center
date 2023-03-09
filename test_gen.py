@@ -13,10 +13,22 @@ mind=Mind(emotions)
 
 mind.init_model()
 
+times=[]
+
 for i in range(25):
 
     start=timer()
 
     mind.mutate()
 
-    print("T: ",timer()-start," s")
+    times.append(timer()-start)
+
+    print("T: ",times[-1]," s")
+
+avg=0
+for t in times:
+    avg+=t
+
+avg=avg/25.0
+
+print("Tavg: ",avg)
