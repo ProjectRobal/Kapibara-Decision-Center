@@ -4,6 +4,8 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras import models
 
+from tflitemodel import LiteModel
+
 BUFFER_SIZE = 16000*2
 
 OUTPUTS=5
@@ -14,7 +16,16 @@ class KapibaraAudio:
     def __init__(self,path=None):
         self.model=None
         if path is not None:
-            self.model=tf.keras.models.load_model(path)
+            self.model= tf.lite.Interpreter(model_path=path)
+
+            self.input_details=self.model.get_input_details()
+            self.output_details=self.model.get_output_details()
+
+            print(self.input_details)
+            print(self.output_details)
+
+            self.model.allocate_tensors()
+
         self.answers=['neutral','unsettling','pleasent','scary','nervous']
         self.sample_rate=16000
         self.buffer_size=BUFFER_SIZE
@@ -141,8 +152,14 @@ class KapibaraAudio:
             validation_data=valid_ds,
             epochs=EPOCHS
             )
+        
+        converter=tf.lite.TFLiteConverter.from_keras_model(model)
+        model_con=converter.convert()
 
-        model.save(save_path)
+        with open('model.tflite', 'wb') as f:
+            f.write(model_con)
+
+        #model.save(save_path)
 
         return history
 
@@ -159,10 +176,10 @@ class KapibaraAudio:
 
     def get_result(self,prediction):
 
-        return self.answers[tf.argmax(prediction.numpy()[0])]
+        return self.answers[tf.argmax(prediction[0])]
 
     '''audio - raw audio input'''
-    def input(self,audio:np.array):
+    def input(self,audio):
 
         if audio.shape[0]<BUFFER_SIZE:
             zeros=tf.zeros(BUFFER_SIZE-audio.shape[0])
@@ -171,10 +188,17 @@ class KapibaraAudio:
         if audio.shape[0]>BUFFER_SIZE:
             audio=tf.slice(audio,0,BUFFER_SIZE)
 
-        spectrogram=self.gen_spectogram(audio)[None,...,tf.newaxis]
+        spectrogram=self.gen_spectogram(audio)
 
+        #prediction = self.model.predict(spectrogram)
 
-        prediction = self.model(spectrogram,training=False)
+        self.model.set_tensor(self.input_details[0]['index'],[spectrogram])
+
+        self.model.invoke()
+
+        prediction=self.model.get_tensor(self.output_details[0]['index'])
+
+        print(prediction)
 
         return self.get_result(prediction)
 

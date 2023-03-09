@@ -103,7 +103,7 @@ with client.connect('127.0.0.1:5051') as channels:
         print("Generation = {generation}".format(generation=ga_instance.generations_completed))
         print("Fitness    = {fitness}".format(fitness=ga_instance.best_solution()[1]))
 
-    def fitness_func(solution, solution_idx):
+    def loop():
         global mind,data
         msg=client.process_data(stub,data)
         data=preprocess_data(msg,data)
@@ -120,7 +120,7 @@ with client.connect('127.0.0.1:5051') as channels:
 
         mind.getData(data)
         
-        predictions=mind.run_model(solution)
+        predictions=mind.run_model()
 
         print("Output: ")
         #print(predictions)
@@ -150,10 +150,11 @@ with client.connect('127.0.0.1:5051') as channels:
 
         return est
     
-    mind=Mind(emotions,fitness_func,callback_generation)
+    mind=Mind(emotions)
 
     mind.init_model()
 
     #mind.test_tflite()
     
-    mind.loop()
+    while True:
+        loop()

@@ -1,7 +1,6 @@
 import pygad.kerasga
 import pygad
 
-
 import numpy as np
 from kapibara_audio import BUFFER_SIZE
 from emotions import EmotionTuple
@@ -17,6 +16,14 @@ import os.path
 
 from timeit import default_timer as timer
 from tflitemodel import LiteModel
+
+from numba import njit
+from numba import int32, float32    # import the types
+from numba.experimental import jitclass
+
+DISTANCE_MAX_VAL=2048.0 # in mm
+MAX_ANGEL=360.0
+
 
 class MindOutputs:
 
@@ -122,7 +129,7 @@ class Mind:
     '''
     
 
-    def __init__(self,emotions:EmotionTuple,fitness,callback) -> None:
+    def __init__(self,emotions:EmotionTuple,number_of_weights_to_mutate=10) -> None:
         self.last_outputs=np.array([MindOutputs(0,0,0,0)]*10)
 
         self.gyroscope=np.zeros(3,dtype=np.float32)
@@ -141,10 +148,7 @@ class Mind:
         self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+len(self.audio)+
                                len(self.audio_coff)+(len(self.last_outputs)*4)+2,dtype=np.float32)
         
-        #self.inputs=self.inputs.reshape(len(self.inputs),1)
-        
-        self.fitness=fitness
-        self.callback=callback
+        self.weights_to_mutate=number_of_weights_to_mutate
 
     
     def init_model(self):
@@ -177,74 +181,55 @@ class Mind:
 
 
         self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
+            
+    def mutate(self):
+        '''A function to mutate a model'''
+        n_layers=len(self.model.layers)
 
-        self.keras_ga=pygad.kerasga.KerasGA(model=self.model,
-                                      num_solutions=10)
+        layer_id=np.random.randint(low=0,high=n_layers-1)
 
-        initial_population=self.keras_ga.population_weights
+        layer=self.model.get_layer(index=layer_id)
 
-        #print(initial_population)
-
-        if os.path.isfile("./mind.pkl"):
-            self.mind=pygad.load("./mind")
-            print("Model has been loaded")
+        l_weights=layer.get_weights()
+        
+        if len(l_weights)==0:
             return
 
+        axis_y_l=len(l_weights[0])
+        axis_x_l=len(l_weights[0][0])
 
-        self.mind=pygad.GA(num_generations=100,
-                           num_parents_mating=10,
-                           initial_population=initial_population,
-                           fitness_func=self.fitness,
-                           on_generation=self.callback,
-                           init_range_high=10,
-                           init_range_low=-5,
-                           parent_selection_type="rank",
-                           crossover_type="scattered",
-                           mutation_type="random",
-                           mutation_percent_genes= 10
-                           )
-    
+        id_y=np.random.randint(low=0,high=axis_y_l)
+        for i in range(self.weights_to_mutate):
+            id_x=np.random.randint(low=0,high=axis_x_l)
+            l_weights[0][id_y][id_x]=(np.random.rand()-0.5)*5
 
-    def test_tflite(self):
+        layer.set_weights(l_weights)
 
-        lite=LiteModel.from_keras_model(self.model)
+        
+
+    def push_model(self,score):
+        '''A function to push model to a current generation
+        score - a score associated to a model'''
+        pass
+        
+    def run_model(self):
 
         self.prepareInput()
 
-        print(lite.predict(self.inputs.reshape(1,len(self.inputs))))
-
-        for i in range(50):
-
-            start=timer()
-
-            print(lite.predict(self.inputs.reshape(1,len(self.inputs))))
-
-            print(timer()-start," s")
-
-        
-    def run_model(self,solutions):
-
-        self.prepareInput()
-
-        predictions=pygad.kerasga.predict(model=self.model,
-                        solution=solutions,
-                        data=self.inputs.reshape(1,len(self.inputs)))
-                
-        return predictions
+        return self.model(self.inputs)
         
         
-
     def getData(self,data:dict):
         
-        self.gyroscope:np.array=data["Gyroscope"]["gyroscope"]/(2**16 -1)
-        self.accelerometer:np.array=data["Gyroscope"]["acceleration"]/(2**16 -1)
+        self.gyroscope:np.array=data["Gyroscope"]["gyroscope"]/MAX_ANGEL
+        self.accelerometer:np.array=data["Gyroscope"]["acceleration"]/DISTANCE_MAX_VAL
 
         self.dis_front=data["Distance_Front"]["distance"]/8160.0
 
         self.dis_floor=data["Distance_Floor"]["distance"]/8160.0
 
-        left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float64)/32767.0
-        right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float64)/32767.0
+        left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
+        right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
 
         for x in left:
             if np.isnan(x):
@@ -253,7 +238,7 @@ class Mind:
             if np.isnan(x):
                 print("Nan in right")
 
-        self.audio:np.array=np.add(left,right,dtype=np.float64)/2.0
+        self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
         for x in self.audio:
             if np.isnan(x):
@@ -310,13 +295,3 @@ class Mind:
         
         self.last_outputs=np.roll(self.last_outputs,-1)
         self.last_outputs[-1]=output
-
-    def loop(self):
-        
-        self.mind.run()
-
-        solution, solution_fitness, solution_idx = self.mind.best_solution()
-        print("Parameters of the best solution : {solution}".format(solution=solution))
-        print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
-
-        self.mind.save("./mind")

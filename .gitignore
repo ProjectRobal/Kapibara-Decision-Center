@@ -1,3 +1,6 @@
 /hearing
 __pycache__
+network/__pycache__
+_grpc/__pycache__
 mind.pkl
+hearing.tflite

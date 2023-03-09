@@ -2,6 +2,7 @@ from emotions import EmotionModifier,EmotionTuple
 from kapibara_audio import KapibaraAudio,BUFFER_SIZE
 import numpy as np
 import time
+from timeit import default_timer as timer
 
 STEP_TIME=0.01
 
@@ -9,32 +10,25 @@ class HearingCenter(EmotionModifier):
     '''modifiers with KapibaraAudio model'''
     def __init__(self) -> None:
         super().__init__()
-        self.hearing=KapibaraAudio('./hearing')
+        self.hearing=KapibaraAudio('./hearing.tflite')
         self.audio=np.zeros(BUFFER_SIZE,np.int16)
-        # a vector of x/m where x is mean value of channel and m is mean value of added signals
-        #self.coefficient=(0,0)
     
     def retriveData(self,data:dict):
         try:
             '''get a specific data from host'''
-            left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float64)/32767.0
-            right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float64)/32767.0
+            left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
+            right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
 
-            self.audio:np.array=np.add(left,right,dtype=np.float64)/2.0
-
-            #m:float=np.mean(self.audio,dtype=np.float32)
-            #l:float=np.mean(left,dtype=np.float32)
-            #r:float=np.mean(right,dtype=np.float32)
-
-            #self.coefficient=(l/m,r/m)
+            self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
         except:
             print("Audio data is missing!")
 
 
     def modify(self,emotions:EmotionTuple):
-    
+        start=timer()
         output=self.hearing.input(self.audio)
+        print("Hearing time: ",timer()-start," s")
 
         if output=="unsettling":
             emotions.unsettlement=1
