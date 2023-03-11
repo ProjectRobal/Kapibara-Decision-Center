@@ -24,6 +24,8 @@ from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier,Shoc
 
 from mind import Mind,MindOutputs
 
+from timeit import default_timer as timer
+
 data:dict = {
     "Motors":
     {
@@ -119,8 +121,12 @@ with client.connect('127.0.0.1:5051') as channels:
         select_mood(emotions)
 
         mind.getData(data)
+
+        start=timer()
         
         predictions=mind.run_model()
+
+        print("Time: ",timer()-start," s")
 
         print("Output: ")
         #print(predictions)

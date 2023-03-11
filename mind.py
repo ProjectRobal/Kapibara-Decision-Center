@@ -172,6 +172,8 @@ class Mind:
 
 
         self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
+
+        
             
     def mutate(self):
         '''A function to mutate a model'''
