@@ -26,6 +26,16 @@ from mind import Mind,MindOutputs
 
 from timeit import default_timer as timer
 
+from deap import base, creator, tools, algorithms
+from scoop import futures
+
+import random
+
+from custom_mutate import mutate_params,mate_params
+
+import genetic
+
+
 data:dict = {
     "Motors":
     {
@@ -105,10 +115,12 @@ with client.connect('127.0.0.1:5051') as channels:
         print("Generation = {generation}".format(generation=ga_instance.generations_completed))
         print("Fitness    = {fitness}".format(fitness=ga_instance.best_solution()[1]))
 
-    def loop():
+    def evalute(individual,award=0):
         global mind,data
         msg=client.process_data(stub,data)
         data=preprocess_data(msg,data)
+
+        mind.update_model(individual)
 
         emotions.clear()
 
@@ -121,6 +133,8 @@ with client.connect('127.0.0.1:5051') as channels:
         select_mood(emotions)
 
         mind.getData(data)
+
+        mind.prepareInput()
 
         start=timer()
         
@@ -154,13 +168,46 @@ with client.connect('127.0.0.1:5051') as channels:
 
         print("Estimation: ",est)
 
-        return est
+        award=est
+
+        return (award,)
     
     mind=Mind(emotions)
 
     mind.init_model()
 
+    ind_size = mind.model_params()
+
     #mind.test_tflite()
-    
-    while True:
-        loop()
+
+    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+    creator.create("Individual", list, fitness=creator.FitnessMax)
+
+    toolbox = base.Toolbox()
+    toolbox.register("weight_bin", random.random)
+    toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.weight_bin, n=ind_size)
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+
+    toolbox.register("mate", tools.cxTwoPoint)
+    #toolbox.register("mate", genetic.mate_params,max_ratio=0.5)
+
+    #toolbox.register("mutate", tools.mutFlipBit, indpb=0.01)
+    toolbox.register("mutate", genetic.mutate_params, indpb=0.01)
+
+    toolbox.register("select", tools.selBest)
+    #toolbox.register("select", cTools.selNSGA2)
+    toolbox.register("evaluate", evalute)
+
+    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    stats.register("Mean", np.mean)
+    stats.register("Max", np.max)
+    stats.register("Min", np.min)
+
+
+
+    pop = toolbox.population(n=10)
+    hof = tools.HallOfFame(1)
+
+
+    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=0.5, mutpb=0.01, ngen=30, halloffame=hof, stats=stats)
+    best_pop = sorted(pop, key=lambda ind: ind.fitness, reverse=True)[0]

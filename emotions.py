@@ -2,12 +2,6 @@ from numba import njit
 from numba import int32, float32    # import the types
 from numba.experimental import jitclass
 
-@jitclass([
-    ("fear",float32),
-    ("anger",float32),
-    ("pleasure",float32),
-    ("unsettlement",float32)
-])
 class EmotionTuple:
     '''A class that will hold all emotion coefficients,
     each variable has range <0,1>'''

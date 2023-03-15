@@ -1,5 +1,4 @@
-import pygad.kerasga
-import pygad
+import deap
 
 import numpy as np
 from kapibara_audio import BUFFER_SIZE
@@ -24,12 +23,7 @@ from numba.experimental import jitclass
 DISTANCE_MAX_VAL=2048.0 # in mm
 MAX_ANGEL=360.0
 
-@jitclass([
-    ('speedA', float32),         
-    ('directionA', float32),
-    ('speedB', float32),         
-    ('directionB', float32)
-])
+
 class MindOutputs:
 
     def __init__(self,speedA:int=0,speedB:int=0,directionA:int=0,directionB:int=0) -> None:
@@ -97,6 +91,42 @@ class MindOutputs:
     
     def motor2(self)->tuple[int,int]:
         return (int(self.speedB),int(self.directionB))
+    
+
+def model_weights_as_vector(model):
+    weights_vector = []
+
+    for layer in model.layers: 
+        if layer.trainable:
+            layer_weights = layer.get_weights()
+            for l_weights in layer_weights:
+                vector = np.reshape(l_weights, newshape=(l_weights.size))
+                weights_vector.extend(vector)
+
+    return np.array(weights_vector)
+
+def model_weights_as_matrix(model, weights_vector):
+    weights_matrix = []
+
+    start = 0
+    for layer_idx, layer in enumerate(model.layers): 
+        layer_weights = layer.get_weights()
+        if layer.trainable:
+            for l_weights in layer_weights:
+                layer_weights_shape = l_weights.shape
+                layer_weights_size = l_weights.size
+        
+                layer_weights_vector = weights_vector[start:start + layer_weights_size]
+                layer_weights_matrix = np.reshape(layer_weights_vector, newshape=(layer_weights_shape))
+                weights_matrix.append(layer_weights_matrix)
+        
+                start = start + layer_weights_size
+        else:
+            for l_weights in layer_weights:
+                weights_matrix.append(l_weights)
+
+    return weights_matrix
+
 
 
 
@@ -136,9 +166,15 @@ class Mind:
 
         self.emotions=emotions
 
+        self.floor_s_inputs=np.zeros(6,dtype=np.float32)
+
+        self.front_s_inputs=np.zeros(6,dtype=np.float32)
+
         self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+len(self.audio)+
-                               len(self.audio_coff)+(len(self.last_outputs)*4)+2,dtype=np.float32)
+                               len(self.audio_coff)+(len(self.last_outputs)*4)+len(self.floor_s_inputs)+
+                               len(self.front_s_inputs),dtype=np.float32)
         
+
         self.weights_to_mutate=number_of_weights_to_mutate
 
     
@@ -173,7 +209,13 @@ class Mind:
 
         self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
 
-        
+    
+    def update_model(self,individual):
+        self.model.set_weights(model_weights_as_matrix(self.model, individual))
+
+
+    def model_params(self):
+        return self.model.count_params()
             
     def mutate(self):
         '''A function to mutate a model'''
@@ -209,7 +251,7 @@ class Mind:
 
         self.prepareInput()
 
-        return self.model(self.inputs)
+        return self.model(self.inputs[None,..., tf.newaxis],training=False)
         
         
     def getData(self,data:dict):
@@ -265,22 +307,31 @@ class Mind:
         self.inputs[6]=self.audio_coff[0]
         self.inputs[7]=self.audio_coff[1]
 
-        self.inputs[8]=self.dis_front
-        self.inputs[9]=self.dis_floor
+        l=8
+
+        for i,x in enumerate(self.front_s_inputs):
+            self.inputs[l+i]=x
+
+        l+=len(self.front_s_inputs)
+
+        for i,x in enumerate(self.floor_s_inputs):
+            self.inputs[l+i]=x
+
+        l+=len(self.floor_s_inputs)
 
         i=0
 
         for samp in self.audio:
-            self.inputs[10+i]=samp
+            self.inputs[i+l]=samp
             i=i+1
 
         i=0
-        l=len(self.audio)
+        l+=len(self.audio)
 
         for out in self.last_outputs:
             put=out.get_norm()
             for x in put:
-                self.inputs[10+i+l]=x
+                self.inputs[i+l]=x
                 i=i+1
 
     
