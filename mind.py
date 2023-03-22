@@ -18,6 +18,9 @@ import os.path
 from timeit import default_timer as timer
 from tflitemodel import LiteModel
 
+DISTANCE_MAX_VAL=2048.0 # in mm
+MAX_ANGEL=360.0
+
 class MindOutputs:
 
     MAX_INPUT_VALUE=4294967295.0
@@ -236,8 +239,8 @@ class Mind:
 
     def getData(self,data:dict):
         
-        self.gyroscope:np.array=data["Gyroscope"]["gyroscope"]/(2**16 -1)
-        self.accelerometer:np.array=data["Gyroscope"]["acceleration"]/(2**16 -1)
+        self.gyroscope:np.array=data["Gyroscope"]["gyroscope"]/MAX_ANGEL
+        self.accelerometer:np.array=data["Gyroscope"]["acceleration"]/DISTANCE_MAX_VAL
 
         self.dis_front=data["Distance_Front"]["distance"]/8160.0
 
