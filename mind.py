@@ -18,6 +18,11 @@ import os.path
 from timeit import default_timer as timer
 from tflitemodel import LiteModel
 
+'''
+Gyroscope is now change of rotation,
+Accelration is now a change of position
+
+'''
 
 DISTANCE_MAX_VAL=2048.0 # in mm
 MAX_ANGEL=360.0
@@ -135,10 +140,6 @@ class Mind:
         self.gyroscope=np.zeros(3,dtype=np.float32)
         self.accelerometer=np.zeros(3,dtype=np.float32)
 
-        self.dis_front=0.0
-
-        self.dis_floor=0.0
-
         self.audio=np.zeros(BUFFER_SIZE,dtype=np.float32)
 
         self.front_sensors=np.zeros(FRONT_SENSORS_COUNT,dtype=np.float32)
@@ -152,7 +153,7 @@ class Mind:
         ''' 0...2 gyroscope, 3...5 accelerometer, 6...7 audio coefficient, floor_sensors, 
         front_sensors, spectogram'''
 
-        self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+SPECTOGRAM_WIDTH**2+
+        self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+
                                len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT,dtype=np.float32)
         
         #self.inputs=self.inputs.reshape(len(self.inputs),1)
@@ -174,11 +175,7 @@ class Mind:
 
     def run_model(self,solutions):
 
-        self.prepareInput()
-
-        predictions=pygad.kerasga.predict(model=self.model,
-                        solution=solutions,
-                        data=self.inputs.reshape(1,len(self.inputs)))
+        predictions=self.model(self.inputs)
                 
         return predictions
         
@@ -186,12 +183,15 @@ class Mind:
 
     def getData(self,data:dict):
         
-        self.gyroscope:np.array=data["Gyroscope"]["gyroscope"]/MAX_ANGEL
-        self.accelerometer:np.array=data["Gyroscope"]["acceleration"]/DISTANCE_MAX_VAL
+        #self.gyroscope:np.array=data["Gyroscope"]["gyroscope"]/MAX_ANGEL
+        #self.accelerometer:np.array=data["Gyroscope"]["acceleration"]/DISTANCE_MAX_VAL
 
-        self.front_sensors[0]=data["Distance_Front"]["distance"]/8160.0
+        self.inputs[0:3]=data["Gyroscope"]["gyroscope"]/MAX_ANGEL
+        self.inputs[4:7]=data["Gyroscope"]["acceleration"]/DISTANCE_MAX_VAL
 
-        self.floor_sensors[0]=data["Distance_Floor"]["distance"]/8160.0
+        self.inputs[10]=data["Distance_Front"]["distance"]/8160.0
+
+        self.inputs[18]=data["Distance_Floor"]["distance"]/8160.0
 
         left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
         right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
@@ -205,17 +205,15 @@ class Mind:
 
         if m==0:
             self.audio_coff=(0.0,0.0)
-            return
+        else:
+            self.audio_coff=(l/m,r/m)
 
-        self.audio_coff=(l/m,r/m)
+        self.inputs[8]=self.audio_coff[0]
+        self.inputs[9]=self.audio_coff[1]
 
-    def prepareInput(self,spectogram):
-        
-        np.put(self.inputs,0,self.gyroscope)
-        np.put(self.inputs,3,self.accelerometer)
-        np.put(self.inputs,6,self.audio_coff)
-        np.put(self.inputs,8,self.front_sensors)
-        np.put(self.inputs,8+len(self.floor_sensors),self.floor_sensors)
+    def prepareInput(self,spectogram=None):
+
+        print(self.inputs)
 
 
     '''Do wyjebania'''

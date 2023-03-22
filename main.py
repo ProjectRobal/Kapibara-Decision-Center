@@ -86,7 +86,7 @@ def placeholder_data(data:dict):
 
     front:DistanceSensor=DistanceSensor(distance=500)
     floor:DistanceSensor=DistanceSensor(distance=5)
-    gyroscope:Gyroscope=Gyroscope(acceleration=[0,0,0],gyroscope=[0,0,0],accel_range=[2**16 -1],gyro_range=[2**16 -1])
+    gyroscope:Gyroscope=Gyroscope(acceleration=[0,0,200],gyroscope=[0,0,2.0],accel_range=2**16 -1,gyro_range=2**16 -1)
     left:AudioChunk=AudioChunk(data=[0]*32000)
     right:AudioChunk=AudioChunk(data=[0]*32000)
 
@@ -98,8 +98,13 @@ def placeholder_data(data:dict):
 
 mind=Mind(emotions)
 
+data=placeholder_data(data)
+
 mind.init_model()
-    
+
+mind.getData(data)
+
+mind.prepareInput()
 #mind.loop()
 
 exit()
