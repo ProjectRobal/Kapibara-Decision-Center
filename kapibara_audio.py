@@ -4,7 +4,6 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from tensorflow.keras import models
 
-from tflitemodel import LiteModel
 
 BUFFER_SIZE = 16000*2
 
