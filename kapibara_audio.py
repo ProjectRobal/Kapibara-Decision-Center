@@ -10,6 +10,7 @@ BUFFER_SIZE = 16000*2
 
 OUTPUTS=5
 
+SPECTOGRAM_WIDTH=96
 
 class KapibaraAudio:
     '''path - a path to a model'''
@@ -29,6 +30,7 @@ class KapibaraAudio:
         self.answers=['neutral','unsettling','pleasent','scary','nervous']
         self.sample_rate=16000
         self.buffer_size=BUFFER_SIZE
+        self.last_spectogram=None
 
     '''read samples from dataset'''
     def read_samples(self,dir,file="train.csv",delimiter=';'):
@@ -103,7 +105,7 @@ class KapibaraAudio:
         #a root 
         input_layer=layers.Input(shape=input_shape)
 
-        resizing=layers.Resizing(96,96)(input_layer)
+        resizing=layers.Resizing(SPECTOGRAM_WIDTH,SPECTOGRAM_WIDTH)(input_layer)
 
         # Instantiate the `tf.keras.layers.Normalization` layer.
         norm_layer = layers.Normalization()
@@ -113,7 +115,7 @@ class KapibaraAudio:
         
         norm_layer(resizing)
 
-        conv1=layers.Conv2D(96, 3, activation='relu')(resizing)
+        conv1=layers.Conv2D(SPECTOGRAM_WIDTH, 3, activation='relu')(resizing)
 
         conv2=layers.Conv2D(128, 3, activation='relu')(conv1)
 
@@ -121,7 +123,7 @@ class KapibaraAudio:
 
         dropout1=layers.Dropout(0.25)(maxpool)
 
-        root_output=layers.Flatten()(dropout1)
+        root_output=layers.Flatten(name='spectogram_out')(dropout1)
 
         #output layers
 
@@ -173,6 +175,7 @@ class KapibaraAudio:
 
         spectrogram = spectrogram[..., tf.newaxis]
         return spectrogram
+    
 
     def get_result(self,prediction):
 

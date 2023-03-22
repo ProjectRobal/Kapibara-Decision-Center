@@ -94,14 +94,19 @@ def placeholder_data(data:dict):
 
     return client.from_message_to_json(msg,data)
 
+
+
+mind=Mind(emotions)
+
+mind.init_model()
+    
+#mind.loop()
+
+exit()
+
 with client.connect('127.0.0.1:5051') as channels:
 #if True:
     stub=client.get_stub(channels)
-
-    def callback_generation(ga_instance):
-        print()
-        print("Generation = {generation}".format(generation=ga_instance.generations_completed))
-        print("Fitness    = {fitness}".format(fitness=ga_instance.best_solution()[1]))
 
     def fitness_func(solution, solution_idx):
         global mind,data
@@ -150,10 +155,8 @@ with client.connect('127.0.0.1:5051') as channels:
 
         return est
     
-    mind=Mind(emotions,fitness_func,callback_generation)
+    mind=Mind(emotions)
 
     mind.init_model()
-
-    #mind.test_tflite()
     
     mind.loop()

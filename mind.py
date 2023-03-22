@@ -3,7 +3,7 @@ import pygad
 
 
 import numpy as np
-from kapibara_audio import BUFFER_SIZE
+from kapibara_audio import BUFFER_SIZE,SPECTOGRAM_WIDTH
 from emotions import EmotionTuple
 
 import tensorflow as tf
@@ -18,8 +18,12 @@ import os.path
 from timeit import default_timer as timer
 from tflitemodel import LiteModel
 
+
 DISTANCE_MAX_VAL=2048.0 # in mm
 MAX_ANGEL=360.0
+
+FLOOR_SENSORS_COUNT=8
+FRONT_SENSORS_COUNT=8
 
 class MindOutputs:
 
@@ -125,7 +129,7 @@ class Mind:
     '''
     
 
-    def __init__(self,emotions:EmotionTuple,fitness,callback) -> None:
+    def __init__(self,emotions:EmotionTuple) -> None:
         self.last_outputs=np.array([MindOutputs(0,0,0,0)]*10)
 
         self.gyroscope=np.zeros(3,dtype=np.float32)
@@ -137,94 +141,37 @@ class Mind:
 
         self.audio=np.zeros(BUFFER_SIZE,dtype=np.float32)
 
+        self.front_sensors=np.zeros(FRONT_SENSORS_COUNT,dtype=np.float32)
+
+        self.floor_sensors=np.zeros(FLOOR_SENSORS_COUNT,dtype=np.float32)
+
         self.audio_coff=(0,0)
 
         self.emotions=emotions
 
-        self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+len(self.audio)+
-                               len(self.audio_coff)+(len(self.last_outputs)*4)+2,dtype=np.float32)
+        ''' 0...2 gyroscope, 3...5 accelerometer, 6...7 audio coefficient, floor_sensors, 
+        front_sensors, spectogram'''
+
+        self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+SPECTOGRAM_WIDTH**2+
+                               len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT,dtype=np.float32)
         
         #self.inputs=self.inputs.reshape(len(self.inputs),1)
-        
-        self.fitness=fitness
-        self.callback=callback
 
     
     def init_model(self):
 
-        input=layers.Input(len(self.inputs))
+        input=tf.keras.layers.Input([None,len(self.inputs)])
 
-        layer_1=layers.Dense(512,activation="linear")(input)
+        layer1=tf.keras.layers.LSTM(512,return_sequences=True)(input)
 
-        layer_2=layers.Dense(386,activation="linear")(layer_1)
+        layer2=tf.keras.layers.LSTM(256,return_sequences=True)(layer1)
 
-        layer_out1_1=layers.Dense(256,activation="linear")(layer_2)
+        output=tf.keras.layers.Dense(4,activation='relu')(layer2)
 
-        layer_out1_2=layers.Dense(128,activation="sigmoid")(layer_out1_1)
-
-        layer_out1_3=layers.Dense(64,activation="sigmoid")(layer_out1_2)
+        self.model=tf.keras.Model(inputs=input,outputs=output)
 
 
-        output_1_speed=layers.Dense(1,activation="sigmoid")(layer_out1_3)
-        output_1_direction=layers.Dense(1,activation="sigmoid")(layer_out1_3)
 
-
-        layer_out2_1=layers.Dense(256,activation="linear")(layer_2)
-
-        layer_out2_2=layers.Dense(128,activation="sigmoid")(layer_out2_1)
-
-        layer_out2_3=layers.Dense(64,activation="sigmoid")(layer_out2_2)
-
-        output_2_speed=layers.Dense(1,activation="sigmoid")(layer_out2_3)
-        output_2_direction=layers.Dense(1,activation="sigmoid")(layer_out2_3)
-
-
-        self.model=models.Model(inputs=input,outputs=[output_1_speed,output_1_direction,output_2_speed,output_2_direction])
-
-        self.keras_ga=pygad.kerasga.KerasGA(model=self.model,
-                                      num_solutions=10)
-
-        initial_population=self.keras_ga.population_weights
-
-        #print(initial_population)
-
-        if os.path.isfile("./mind.pkl"):
-            self.mind=pygad.load("./mind")
-            print("Model has been loaded")
-            return
-
-
-        self.mind=pygad.GA(num_generations=100,
-                           num_parents_mating=10,
-                           initial_population=initial_population,
-                           fitness_func=self.fitness,
-                           on_generation=self.callback,
-                           init_range_high=10,
-                           init_range_low=-5,
-                           parent_selection_type="rank",
-                           crossover_type="scattered",
-                           mutation_type="random",
-                           mutation_percent_genes= 10
-                           )
-    
-
-    def test_tflite(self):
-
-        lite=LiteModel.from_keras_model(self.model)
-
-        self.prepareInput()
-
-        print(lite.predict(self.inputs.reshape(1,len(self.inputs))))
-
-        for i in range(50):
-
-            start=timer()
-
-            print(lite.predict(self.inputs.reshape(1,len(self.inputs))))
-
-            print(timer()-start," s")
-
-        
     def run_model(self,solutions):
 
         self.prepareInput()
@@ -242,35 +189,19 @@ class Mind:
         self.gyroscope:np.array=data["Gyroscope"]["gyroscope"]/MAX_ANGEL
         self.accelerometer:np.array=data["Gyroscope"]["acceleration"]/DISTANCE_MAX_VAL
 
-        self.dis_front=data["Distance_Front"]["distance"]/8160.0
+        self.front_sensors[0]=data["Distance_Front"]["distance"]/8160.0
 
-        self.dis_floor=data["Distance_Floor"]["distance"]/8160.0
+        self.floor_sensors[0]=data["Distance_Floor"]["distance"]/8160.0
 
         left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
         right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
 
-        for x in left:
-            if np.isnan(x):
-                print("Nan in left")
-        for x in right:
-            if np.isnan(x):
-                print("Nan in right")
-
         self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
-
-        for x in self.audio:
-            if np.isnan(x):
-                print("Nan in audio")
 
         m:float=np.mean(self.audio)
 
         l:float=np.mean(left)
         r:float=np.mean(right)
-
-        #print(self.gyroscope)
-        #print(self.accelerometer)
-        #print(self.dis_front)
-        #print(self.dis_floor)
 
         if m==0:
             self.audio_coff=(0.0,0.0)
@@ -278,48 +209,21 @@ class Mind:
 
         self.audio_coff=(l/m,r/m)
 
-    def prepareInput(self):
-        self.inputs[0]=self.gyroscope[0]
-        self.inputs[1]=self.gyroscope[1]
-        self.inputs[2]=self.gyroscope[2]
+    def prepareInput(self,spectogram):
+        
+        np.put(self.inputs,0,self.gyroscope)
+        np.put(self.inputs,3,self.accelerometer)
+        np.put(self.inputs,6,self.audio_coff)
+        np.put(self.inputs,8,self.front_sensors)
+        np.put(self.inputs,8+len(self.floor_sensors),self.floor_sensors)
 
-        self.inputs[3]=self.accelerometer[0]
-        self.inputs[4]=self.accelerometer[1]
-        self.inputs[5]=self.accelerometer[2]
 
-        self.inputs[6]=self.audio_coff[0]
-        self.inputs[7]=self.audio_coff[1]
-
-        self.inputs[8]=self.dis_front
-        self.inputs[9]=self.dis_floor
-
-        i=0
-
-        for samp in self.audio:
-            self.inputs[10+i]=samp
-            i=i+1
-
-        i=0
-        l=len(self.audio)
-
-        for out in self.last_outputs:
-            put=out.get_norm()
-            for x in put:
-                self.inputs[10+i+l]=x
-                i=i+1
-
-    
+    '''Do wyjebania'''
     def push_output(self,output:MindOutputs):
         
         self.last_outputs=np.roll(self.last_outputs,-1)
         self.last_outputs[-1]=output
 
     def loop(self):
+        pass
         
-        self.mind.run()
-
-        solution, solution_fitness, solution_idx = self.mind.best_solution()
-        print("Parameters of the best solution : {solution}".format(solution=solution))
-        print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
-
-        self.mind.save("./mind")
