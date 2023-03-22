@@ -3,3 +3,4 @@ __pycache__
 mind.pkl
 mutation
 tensorflow
+hearing.tflite
