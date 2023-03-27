@@ -101,6 +101,7 @@ class KapibaraAudio:
         for spectrogram, _ in dataset.take(1):
             input_shape = spectrogram.shape
 
+        print(input_shape)
         #a root 
         input_layer=layers.Input(shape=input_shape)
 
@@ -122,7 +123,7 @@ class KapibaraAudio:
 
         dropout1=layers.Dropout(0.25)(maxpool)
 
-        root_output=layers.Flatten(name='spectogram_out')(dropout1)
+        root_output=layers.Flatten()(dropout1)
 
         #output layers
 
@@ -171,10 +172,17 @@ class KapibaraAudio:
         spectrogram=tf.signal.stft(audio,frame_length=255,frame_step=128)
 
         spectrogram = tf.abs(spectrogram)
+        
+        print(spectrogram.shape)
 
         spectrogram = spectrogram[..., tf.newaxis]
+
+        self.last_spectogram=spectrogram
+
         return spectrogram
     
+    def get_last_spectogram(self):
+        return self.last_spectogram
 
     def get_result(self,prediction):
 

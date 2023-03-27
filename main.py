@@ -24,6 +24,8 @@ from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier,Shoc
 
 from mind import Mind,MindOutputs
 
+from timeit import default_timer as timer
+
 data:dict = {
     "Motors":
     {
@@ -102,10 +104,31 @@ data=placeholder_data(data)
 
 mind.init_model()
 
+
+data_prep_time=timer()
+
 mind.getData(data)
 
-mind.prepareInput()
+mind.prepareInput(np.random.random((249,129)))
+
+print("Data time: ",timer()-data_prep_time)
+
+#mind.train_test()
+
 #mind.loop()
+start=timer()
+
+mind.run_model()
+
+print("Time: ",timer()-start," s")
+
+for i in range(10):
+
+    start=timer()
+
+    mind.run_model()
+
+    print("Time: ",timer()-start," s")
 
 exit()
 

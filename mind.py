@@ -16,7 +16,8 @@ import math
 import os.path
 
 from timeit import default_timer as timer
-from tflitemodel import LiteModel
+
+MODEL_PATH='mind.tf'
 
 '''
 Gyroscope is now change of rotation,
@@ -156,26 +157,79 @@ class Mind:
         self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+
                                len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT,dtype=np.float32)
         
+        self.spectogram=None
+        
         #self.inputs=self.inputs.reshape(len(self.inputs),1)
 
     
     def init_model(self):
 
+        if os.path.exists(MODEL_PATH):
+            self.model=tf.keras.models.load_model(MODEL_PATH)
+            return
+        
+        #a root 
+        audio_input_layer=layers.Input([None,249,129])
+
+        resizing=layers.Resizing(64,64)(audio_input_layer)
+
+        # Instantiate the `tf.keras.layers.Normalization` layer.
+        norm_layer = layers.Normalization()
+        # Fit the state of the layer to the spectrograms
+        # with `Normalization.adapt`.
+        #norm_layer.adapt(data=dataset.map(map_func=lambda spec, label: spec))
+        
+        norm_layer(resizing)
+
+        conv1=layers.Conv2D(64, 3, activation='relu')(resizing)
+
+        conv2=layers.Conv2D(32, 3, activation='relu')(conv1)
+
+        conv3=layers.Conv2D(16, 3, activation='relu')(conv2)
+
+        maxpool=layers.MaxPooling2D()(conv3)
+
+        dropout1=layers.Dropout(0.25)(maxpool)
+
+        audio_output=layers.Flatten()(dropout1)
+
+        reshape=tf.keras.layers.Reshape((1,13456))(audio_output)
+
         input=tf.keras.layers.Input([None,len(self.inputs)])
 
-        layer1=tf.keras.layers.LSTM(512,return_sequences=True)(input)
+        embed=tf.keras.layers.Concatenate()([input,reshape])
+
+        layer1=tf.keras.layers.LSTM(512,return_sequences=True)(embed)
 
         layer2=tf.keras.layers.LSTM(256,return_sequences=True)(layer1)
 
-        output=tf.keras.layers.Dense(4,activation='relu')(layer2)
+        layer3=tf.keras.layers.LSTM(64,return_sequences=True)(layer2)
 
-        self.model=tf.keras.Model(inputs=input,outputs=output)
+        output=tf.keras.layers.Dense(4,activation='relu')(layer3)
+
+        self.model=tf.keras.Model(inputs=[audio_input_layer,input],outputs=output)
+
+        self.model.compile(
+            loss=tf.keras.losses.BinaryCrossentropy(),
+            optimizer="adam",
+            metrics=["accuracy"],
+        )
+
+    def train_test(self):
+
+        x=np.random.random(len(self.inputs)*10).reshape(10,1,len(self.inputs))
+        y=np.random.random(4*10).reshape(10,4)
+
+        self.model.fit(x=x,y=y, batch_size=256,epochs=10)
 
 
+    def run_model(self):
 
-    def run_model(self,solutions):
-
-        predictions=self.model(self.inputs)
+        predictions=self.model((
+                                self.spectogram[None,tf.newaxis],
+                                self.inputs.reshape(1,1,len(self.inputs)),
+                                ),
+                                training=False)
                 
         return predictions
         
@@ -211,16 +265,8 @@ class Mind:
         self.inputs[8]=self.audio_coff[0]
         self.inputs[9]=self.audio_coff[1]
 
-    def prepareInput(self,spectogram=None):
-
-        print(self.inputs)
-
-
-    '''Do wyjebania'''
-    def push_output(self,output:MindOutputs):
-        
-        self.last_outputs=np.roll(self.last_outputs,-1)
-        self.last_outputs[-1]=output
+    def prepareInput(self,spectogram):
+        self.spectogram=spectogram
 
     def loop(self):
         pass
