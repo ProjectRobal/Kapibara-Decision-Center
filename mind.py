@@ -239,14 +239,6 @@ class Mind:
         converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
         self.lite_model=converter.convert()
 
-        self.input_details=self.lite_model.get_input_details()
-        self.output_details=self.lite_model.get_output_details()
-
-        print(self.input_details)
-        print(self.output_details)
-
-        self.lite_model.allocate_tensors()
-
 
     def train_test(self):
 

@@ -11,7 +11,6 @@ import numpy as np
 from enum import Enum
 import tensorflow as tf
 
-
 from mind import MindFrame
 
 QUEUE_SIZE=50
@@ -24,7 +23,7 @@ class Franklin:
         CONVERTING = 4
         DONE = 5
     
-    def __init__(self,model) -> None:
+    def __init__(self,model:tf.keras.Model) -> None:
         '''model - a keras model'''
         self.model=model
         self.frames:list[MindFrame]=[]
@@ -43,7 +42,18 @@ class Franklin:
 
     def analyze(self):
         '''analyze and remove/modify frames'''
-        pass
+        last_answer:MindFrame=self.frames[0]
+        trim=False
+        for frame in self.frames:
+            if trim:
+                self.frames.remove(frame)
+            
+            if frame.getReward()<last_answer.getReward():
+                trim=True
+            elif frame.getReward()>last_answer.getReward():
+                trim=False
+
+            last_answer=frame
 
     def train(self):
         '''train with fit function'''
