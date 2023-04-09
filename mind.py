@@ -175,6 +175,8 @@ class Mind:
                                len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT,dtype=np.float32)
         
         self.spectogram=None
+
+        self.lite_model=None
         
         #self.inputs=self.inputs.reshape(len(self.inputs),1)
 
@@ -231,6 +233,20 @@ class Mind:
             optimizer="adam",
             metrics=["accuracy"],
         )
+
+        # try use tf lite model instead of normal model
+
+        converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
+        self.lite_model=converter.convert()
+
+        self.input_details=self.lite_model.get_input_details()
+        self.output_details=self.lite_model.get_output_details()
+
+        print(self.input_details)
+        print(self.output_details)
+
+        self.lite_model.allocate_tensors()
+
 
     def train_test(self):
 

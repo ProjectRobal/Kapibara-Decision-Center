@@ -9,6 +9,9 @@ Return it to Mind module
 
 import numpy as np
 from enum import Enum
+import tensorflow as tf
+
+
 from mind import MindFrame
 
 QUEUE_SIZE=50
