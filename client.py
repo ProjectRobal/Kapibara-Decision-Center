@@ -11,7 +11,7 @@ import behavior
 
 mic=Microphone(chunk=16000)
 
-model=KapibaraAudio('./best_model')
+model=KapibaraAudio('./hearing.tflite')
 
 
 def design_butter_lowpass_filter(cutoff,fs,order):
@@ -59,7 +59,7 @@ def select_mood(output):
     curr_mood=moods[output]
 
 
-with client.connect('192.168.108.216:5051') as channels:
+with client.connect('192.168.89.216:5051') as channels:
     stub=client.get_stub(channels)
     while True:
 

@@ -111,6 +111,23 @@ class MindOutputs:
     
     def motor2(self)->tuple[int,int]:
         return (int(self.speedB),int(self.directionB))
+    
+class MindFrame:
+    '''A pair of inputs and outputs of mind'''
+    def __init__(self,inputs,spectogram,output:MindOutputs,reward:float) -> None:
+        self.input=(inputs,spectogram)
+
+        self.output=output
+        self.reward=reward
+
+    def getInput(self):
+        return self.input
+    
+    def getOutput(self):
+        return self.output
+    
+    def getReward(self):
+        return self.reward
 
 class Mind:
     OUTPUTS_BUFFER=10

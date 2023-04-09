@@ -173,8 +173,6 @@ class KapibaraAudio:
 
         spectrogram = tf.abs(spectrogram)
         
-        print(spectrogram.shape)
-
         spectrogram = spectrogram[..., tf.newaxis]
 
         self.last_spectogram=spectrogram
