@@ -14,6 +14,7 @@ import math
 import os.path
 
 from timeit import default_timer as timer
+import threading
 
 
 MODEL_PATH='mind.tf'
@@ -215,6 +216,9 @@ class Franklin:
             except Exception as e:
                 print(e)
                 self.reset()
+
+    def __del__(self):
+        self.run=False
                 
 
 class Mind:
@@ -264,6 +268,8 @@ class Mind:
         self.lite_model=None
 
         self.validator=None
+
+        self.validator_thread=None
         
         #self.inputs=self.inputs.reshape(len(self.inputs),1)
 
@@ -332,6 +338,10 @@ class Mind:
         self.lite_model.allocate_tensors()
 
         self.validator=Franklin(self.model)
+
+        self.validator_thread=threading.Thread(target=self.validator.loop)
+
+        self.validator_thread.run()
 
 
     def train_test(self):
@@ -405,4 +415,4 @@ class Mind:
 
         self.validator.push(output)
 
-        return output      
+        return output
