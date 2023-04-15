@@ -107,9 +107,9 @@ mind.init_model()
 
 data_prep_time=timer()
 
-mind.getData(data)
+data["spectogram"]=np.random.random((249,129))
 
-mind.prepareInput(np.random.random((249,129)))
+mind.getData(data)
 
 print("Data time: ",timer()-data_prep_time)
 
@@ -136,55 +136,31 @@ with client.connect('127.0.0.1:5051') as channels:
 #if True:
     stub=client.get_stub(channels)
 
-    def fitness_func(solution, solution_idx):
-        global mind,data
-        msg=client.process_data(stub,data)
-        data=preprocess_data(msg,data)
+    msg=client.process_data(stub,data)
+    data=preprocess_data(msg,data)
 
-        emotions.clear()
+    emotions.clear()
 
-        for mod in modifiers:
-            mod.retriveData(data)
+    for mod in modifiers:
+        mod.retriveData(data)
 
-        for mod in modifiers:
-            mod.modify(emotions)
+    for mod in modifiers:
+        mod.modify(emotions)
 
-        select_mood(emotions)
+    select_mood(emotions)
 
-        mind.getData(data)
-        
-        predictions=mind.run_model(solution)
+    mind.getData(data)
 
-        print("Output: ")
-        #print(predictions)
+    output=mind.loop()
 
-        print(predictions[0]," ",predictions[2]," ",predictions[1]," ",predictions[3])
+    data["Motors"]["speedA"]=output.motor1()[0]
+    data["Motors"]["speedB"]=output.motor2()[0]
+    data["Motors"]["directionA"]=output.motor1()[1]
+    data["Motors"]["directionB"]=output.motor2()[1]
 
-        output=MindOutputs()
+    curr_mood.loop()
 
-        output.set_from_norm(predictions[0][0][0],predictions[2][0][0],predictions[1][0][0],predictions[3][0][0])
-
-        err=output.error()
-
-        mind.push_output(output)
-
-        data["Motors"]["speedA"]=output.motor1()[0]
-        data["Motors"]["speedB"]=output.motor2()[0]
-        data["Motors"]["directionA"]=output.motor1()[1]
-        data["Motors"]["directionB"]=output.motor2()[1]
-
-        curr_mood.loop()
-
-        print(str(emotions))
-
-        est=emotions.estimate()+err
-
-        print("Estimation: ",est)
-
-        return est
+    print(str(emotions))
+    print("Outputs: ")
+    print(str(output.get()))
     
-    mind=Mind(emotions)
-
-    mind.init_model()
-    
-    mind.loop()

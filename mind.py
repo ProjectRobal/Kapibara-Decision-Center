@@ -1,8 +1,6 @@
-import pygad.kerasga
-import pygad
-
 
 import numpy as np
+from enum import Enum
 from kapibara_audio import BUFFER_SIZE,SPECTOGRAM_WIDTH
 from emotions import EmotionTuple
 
@@ -16,6 +14,7 @@ import math
 import os.path
 
 from timeit import default_timer as timer
+
 
 MODEL_PATH='mind.tf'
 
@@ -42,39 +41,16 @@ class MindOutputs:
         self.speedB=speedB
         self.directionB=directionB
 
-    def error(self)->float:
-        error=0
-
-        if self.speedA>100:
-            error-=50*(self.speedA/100.0)
-        if self.speedB>100:
-            error-=50*(self.speedB/100.0)
-        if self.directionA>3:
-            error-=50*(self.directionA/3.0)
-        if self.directionB>3:
-            error-=50*(self.directionB/3.0)
-
-        if math.isnan(self.speedA):
-            error-=100
-        if math.isnan(self.speedB):
-            error-=100
-        if math.isnan(self.directionA):
-            error-=100
-        if math.isnan(self.directionB):
-            error-=100
-
-        return error
-
-    def get(self)->list[float]:
-        return [self.speedA,self.speedB,self.directionA,self.directionB]
+    def get(self)->tuple[float]:
+        return (self.speedA,self.speedB,self.directionA,self.directionB)
     
-    def get_norm(self)->list[float]:
-        return [self.speedA/100.0,self.speedB/100.0,self.directionA/4.0,self.directionB/4.0]
+    def get_norm(self)->tuple[float]:
+        return (self.speedA/100.0,self.speedB/100.0,self.directionA/4.0,self.directionB/4.0)
     
     def set_from_norm(self,speedA:float,speedB:float,directionA:float,directionB:float):
 
-        self.speedA=speedA*100
-        self.speedB=speedB*100
+        self.speedA=speedA*100.0
+        self.speedB=speedB*100.0
 
         if directionA>=0 and directionA<0.25:
             self.directionA=0
@@ -93,18 +69,6 @@ class MindOutputs:
             self.directionB=2
         else:
             self.directionB=3
-
-        if self.speedA>self.MAX_INPUT_VALUE:
-            self.speedA=self.MAX_INPUT_VALUE
-
-        if self.speedB>self.MAX_INPUT_VALUE:
-            self.speedB=self.MAX_INPUT_VALUE
-
-        if self.directionA>self.MAX_INPUT_VALUE:
-            self.directionA=self.MAX_INPUT_VALUE
-
-        if self.directionB>self.MAX_INPUT_VALUE:
-            self.directionB=self.MAX_INPUT_VALUE
 
     def motor1(self)->tuple[int,int]:
         return (int(self.speedA),int(self.directionA))
@@ -128,10 +92,132 @@ class MindFrame:
     
     def getReward(self):
         return self.reward
+    
+class Franklin:
+    QUEUE_SIZE=50
+    EPOCHES=50
+    OUTPUT_PATH="mind.tflite"
+
+    class Status(Enum):
+        COLLECTING = 1
+        ANALYZING = 2
+        TRAINING = 3
+        CONVERTING = 4
+        DONE = 5
+    
+    def __init__(self,model:tf.keras.Model) -> None:
+        '''model - a keras model'''
+        self.model=model
+        self.frames:list[MindFrame]=[]
+        self.state=self.Status.COLLECTING
+        self.tflite=None
+        self.run=True
+
+    def push(self,frame:MindFrame)->None:
+        if self.state!=self.Status.COLLECTING:
+            return
+
+        if len(self.frames)>=self.QUEUE_SIZE:
+            self.state=self.Status.ANALYZING
+            return
+
+        self.frames.append(frame)
+
+    def mutate(self,frame:MindFrame):
+        output:MindOutputs=frame.getOutput()
+
+        output.directionA=np.random.random()
+        output.directionB=np.random.random()        
+
+    def analyze(self):
+        '''analyze and remove/modify frames'''
+        last_answer:MindFrame=self.frames[0]
+        trim=False
+        for frame in self.frames:
+            if trim:
+                self.frames.remove(frame)
+            
+            if frame.getReward()<last_answer.getReward():
+                trim=True
+                self.mutate(frame)
+            elif frame.getReward()>last_answer.getReward():
+                trim=False
+
+            last_answer=frame
+
+    def train(self):
+        '''train with fit function'''
+
+        inputs=[]
+        outputs=[]
+
+        for frame in self.frames:
+            inputs.append(frame.getInput())
+            outputs.append(frame.getOutput().get_norm())
+
+        dataset=tf.data.Dataset.from_tensor_slices((inputs,outputs))
+
+        train_ds=dataset
+
+        train_ds=train_ds.batch(64)
+
+        train_ds = train_ds.cache().prefetch(tf.data.AUTOTUNE)
+
+        _ = self.model.fit(
+            train_ds,
+            epochs=self.EPOCHES
+            )
+        
+        self.state=self.Status.CONVERTING
+
+    def convert(self):
+        '''convert keras model into tf lite'''
+
+        converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
+        self.tflite=converter.convert()
+
+        with open(self.OUTPUT_PATH, 'wb') as f:
+            f.write(self.tflite)
+
+        self.state=self.Status.DONE
+
+    def get_tf_lite(self):
+        if self.state==self.Status.DONE:
+            self.reset()
+            return self.tflite
+        else:
+            return None
+        
+    def is_done(self)->bool:
+        return self.state==self.Status.DONE
+    
+    def reset(self):
+        self.state=self.Status.COLLECTING
+        self.frames.clear()
+
+    def kill(self):
+        self.run=False
+        
+    def loop(self):
+        while self.run:
+            try:
+                match self.state:
+                    case self.Status.COLLECTING:
+                        continue
+                    case self.Status.ANALYZING:
+                        self.analyze()
+                    case self.Status.TRAINING:
+                        self.train()
+                    case self.Status.CONVERTING:
+                        self.convert()
+                    case _:
+                        continue
+            except Exception as e:
+                print(e)
+                self.reset()
+                
 
 class Mind:
-    OUTPUTS_BUFFER=10
-    NUM_GENERATIONS=50
 
     '''A class that represents decision model
     A inputs: 
@@ -150,7 +236,6 @@ class Mind:
     Outputs:
 
     '''
-    
 
     def __init__(self,emotions:EmotionTuple) -> None:
         self.last_outputs=np.array([MindOutputs(0,0,0,0)]*10)
@@ -177,6 +262,8 @@ class Mind:
         self.spectogram=None
 
         self.lite_model=None
+
+        self.validator=None
         
         #self.inputs=self.inputs.reshape(len(self.inputs),1)
 
@@ -237,7 +324,14 @@ class Mind:
         # try use tf lite model instead of normal model
 
         converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
+
         self.lite_model=converter.convert()
+        self.input_details=self.lite_model.get_input_details()
+        self.output_details=self.lite_model.get_output_details()
+
+        self.lite_model.allocate_tensors()
+
+        self.validator=Franklin(self.model)
 
 
     def train_test(self):
@@ -290,9 +384,25 @@ class Mind:
         self.inputs[8]=self.audio_coff[0]
         self.inputs[9]=self.audio_coff[1]
 
-    def prepareInput(self,spectogram):
-        self.spectogram=spectogram
+        self.spectogram=data["spectogram"]
 
-    def loop(self):
-        pass
-        
+
+    def loop(self)->MindOutputs:
+
+        if self.validator.is_done():
+            self.lite_model= tf.lite.Interpreter(model_path=Franklin.OUTPUT_PATH)
+
+            self.input_details=self.lite_model.get_input_details()
+            self.output_details=self.lite_model.get_output_details()
+
+            self.lite_model.allocate_tensors()
+
+        predictions=self.run_model()
+
+        output=MindOutputs()
+
+        output.set_from_norm(predictions[0][0][0],predictions[2][0][0],predictions[1][0][0],predictions[3][0][0])
+
+        self.validator.push(output)
+
+        return output      
