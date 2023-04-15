@@ -11,9 +11,11 @@ import numpy as np
 from enum import Enum
 import tensorflow as tf
 
-from mind import MindFrame
+from mind import MindFrame,MindOutputs
 
 QUEUE_SIZE=50
+
+EPOCHES=50
 
 class Franklin:
     class Status(Enum):
@@ -40,6 +42,12 @@ class Franklin:
 
         self.frames.append(frame)
 
+    def mutate(self,frame:MindFrame):
+        output:MindOutputs=frame.getOutput()
+
+        output.directionA=np.random.random()
+        output.directionB=np.random.random()        
+
     def analyze(self):
         '''analyze and remove/modify frames'''
         last_answer:MindFrame=self.frames[0]
@@ -50,6 +58,7 @@ class Franklin:
             
             if frame.getReward()<last_answer.getReward():
                 trim=True
+                self.mutate(frame)
             elif frame.getReward()>last_answer.getReward():
                 trim=False
 
@@ -57,31 +66,65 @@ class Franklin:
 
     def train(self):
         '''train with fit function'''
-        pass
+
+        inputs=[]
+        outputs=[]
+
+        for frame in self.frames:
+            inputs.append(frame.getInput())
+            outputs.append(frame.getOutput())
+
+        dataset=tf.data.Dataset.from_tensor_slices((inputs,outputs))
+
+        train_ds=dataset
+
+        train_ds=train_ds.batch(64)
+
+        train_ds = train_ds.cache().prefetch(tf.data.AUTOTUNE)
+
+        _ = self.model.fit(
+            train_ds,
+            epochs=EPOCHES
+            )
+        
+        self.state=self.Status.CONVERTING
 
     def convert(self):
         '''convert keras model into tf lite'''
-        pass
+
+        converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
+        self.tflite=converter.convert()
+
+        self.state=self.Status.DONE
 
     def get_tf_lite(self):
         if self.state==self.Status.DONE:
             self.state=self.Status.COLLECTING
             return self.tflite
         
+    
+    def reset(self):
+        self.state=self.Status.COLLECTING
+        self.frames.clear()
+        
 
     def loop(self):
         while True:
-            match self.state:
-                case self.Status.COLLECTING:
-                    continue
-                case self.Status.ANALYZING:
-                    self.analyze()
-                case self.Status.TRAINING:
-                    self.train()
-                case self.Status.CONVERTING:
-                    self.convert()
-                case _:
-                    continue
+            try:
+                match self.state:
+                    case self.Status.COLLECTING:
+                        continue
+                    case self.Status.ANALYZING:
+                        self.analyze()
+                    case self.Status.TRAINING:
+                        self.train()
+                    case self.Status.CONVERTING:
+                        self.convert()
+                    case _:
+                        continue
+            except Exception as e:
+                print(e)
+                self.reset()
                 
 
 
