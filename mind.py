@@ -15,6 +15,7 @@ import os.path
 
 from timeit import default_timer as timer
 import threading
+from multiprocessing import Process
 
 
 MODEL_PATH='mind.tf'
@@ -216,9 +217,6 @@ class Franklin:
             except Exception as e:
                 print(e)
                 self.reset()
-
-    def __del__(self):
-        self.run=False
                 
 
 class Mind:
@@ -331,17 +329,28 @@ class Mind:
 
         converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
 
-        self.lite_model=converter.convert()
+        converter.optimizations = [tf.lite.Optimize.DEFAULT]
+        converter.experimental_new_converter=True
+        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS,
+tf.lite.OpsSet.SELECT_TF_OPS]
+
+        self.lite_model=tf.lite.Interpreter(model_content=converter.convert())
         self.input_details=self.lite_model.get_input_details()
         self.output_details=self.lite_model.get_output_details()
+
+        print("Inputs details: ")
+        print(self.input_details)
+
+        print("Outputs details: ")
+        print(self.output_details)
 
         self.lite_model.allocate_tensors()
 
         self.validator=Franklin(self.model)
 
-        self.validator_thread=threading.Thread(target=self.validator.loop)
+        self.validator_thread=Process(target=self.validator.loop)
 
-        self.validator_thread.run()
+        self.validator_thread.start()
 
 
     def train_test(self):
@@ -352,15 +361,27 @@ class Mind:
         self.model.fit(x=x,y=y, batch_size=256,epochs=10)
 
 
-    def run_model(self):
+    def run_model(self,lite=True):
 
-        predictions=self.model((
+        if lite:
+
+            self.lite_model.set_tensor(self.input_details[0]['index'],[[self.spectogram]])
+
+            self.lite_model.set_tensor(self.input_details[1]['index'],[[self.inputs]])
+
+            self.lite_model.invoke()
+
+            prediction=self.lite_model.get_tensor(self.output_details[0]['index'])
+
+            return prediction
+        else:
+            predictions=self.model((
                                 self.spectogram[None,tf.newaxis],
                                 self.inputs.reshape(1,1,len(self.inputs)),
                                 ),
                                 training=False)
                 
-        return predictions
+            return predictions
         
         
 
@@ -416,3 +437,7 @@ class Mind:
         self.validator.push(output)
 
         return output
+    
+    def stop(self):
+        self.validator.kill()
+        self.validator_thread.join()

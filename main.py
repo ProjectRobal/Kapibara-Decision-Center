@@ -107,7 +107,7 @@ mind.init_model()
 
 data_prep_time=timer()
 
-data["spectogram"]=np.random.random((249,129))
+data["spectogram"]=np.random.random((249,129)).astype(dtype=np.float32)
 
 mind.getData(data)
 
@@ -118,18 +118,20 @@ print("Data time: ",timer()-data_prep_time)
 #mind.loop()
 start=timer()
 
-mind.run_model()
+mind.run_model(True)
 
-print("Time: ",timer()-start," s")
+print(timer()-start," s")
 
 for i in range(10):
 
     start=timer()
 
-    mind.run_model()
+    mind.run_model(True)
 
-    print("Time: ",timer()-start," s")
+    print(timer()-start," s")
 
+
+mind.stop()
 exit()
 
 with client.connect('127.0.0.1:5051') as channels:
