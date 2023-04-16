@@ -165,4 +165,5 @@ with client.connect('127.0.0.1:5051') as channels:
     print(str(emotions))
     print("Outputs: ")
     print(str(output.get()))
-    
+
+mind.stop()

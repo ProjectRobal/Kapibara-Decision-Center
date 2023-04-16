@@ -95,7 +95,7 @@ class MindFrame:
     def getReward(self):
         return self.reward
     
-class Franklin:
+class Franklin(Process):
     QUEUE_SIZE=50
     EPOCHES=50
     OUTPUT_PATH="mind.tflite"
@@ -108,12 +108,13 @@ class Franklin:
         DONE = 5
     
     def __init__(self,model:tf.keras.Model) -> None:
+        super(Process,self).__init__()
         '''model - a keras model'''
         self.model=model
         self.frames:list[MindFrame]=[]
         self.state=self.Status.COLLECTING
         self.tflite=None
-        self.run=True
+        self._run=True
 
     def push(self,frame:MindFrame)->None:
         if self.state!=self.Status.COLLECTING:
@@ -196,12 +197,9 @@ class Franklin:
     def reset(self):
         self.state=self.Status.COLLECTING
         self.frames.clear()
-
-    def kill(self):
-        self.run=False
         
     def loop(self):
-        while self.run:
+        while self._run:
             try:
                 match self.state:
                     case self.Status.COLLECTING:
@@ -217,6 +215,9 @@ class Franklin:
             except Exception as e:
                 print(e)
                 self.reset()
+
+    def run(self) -> None:
+        self.loop()
                 
 
 class Mind:
@@ -348,9 +349,9 @@ tf.lite.OpsSet.SELECT_TF_OPS]
 
         self.validator=Franklin(self.model)
 
-        self.validator_thread=Process(target=self.validator.loop)
+        #self.validator_thread=Process(target=self.validator.loop)
 
-        self.validator_thread.start()
+        self.validator.start()
 
 
     def train_test(self):
@@ -440,4 +441,4 @@ tf.lite.OpsSet.SELECT_TF_OPS]
     
     def stop(self):
         self.validator.kill()
-        self.validator_thread.join()
+        self.validator.join()
