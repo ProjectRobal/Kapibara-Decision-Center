@@ -63,8 +63,6 @@ modifiers:list[EmotionModifier]=[
 ]
 
 
-#exit()
-
 def select_mood(emotions:EmotionTuple):
     global curr_mood
     list:list[float]=emotions.get_list()
@@ -97,7 +95,6 @@ def placeholder_data(data:dict):
     return client.from_message_to_json(msg,data)
 
 
-
 mind=Mind(emotions)
 
 data=placeholder_data(data)
@@ -113,12 +110,9 @@ mind.getData(data)
 
 print("Data time: ",timer()-data_prep_time)
 
-#mind.train_test()
-
-#mind.loop()
 start=timer()
 
-mind.run_model(True)
+print(mind.run_model(True)[0][0])
 
 print(timer()-start," s")
 

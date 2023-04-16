@@ -177,6 +177,11 @@ class Franklin(Process):
         '''convert keras model into tf lite'''
 
         converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
+        converter.optimizations = [tf.lite.Optimize.DEFAULT]
+        converter.experimental_new_converter=True
+        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS,
+tf.lite.OpsSet.SELECT_TF_OPS]
+        
         self.tflite=converter.convert()
 
         with open(self.OUTPUT_PATH, 'wb') as f:
@@ -349,8 +354,6 @@ tf.lite.OpsSet.SELECT_TF_OPS]
 
         self.validator=Franklin(self.model)
 
-        #self.validator_thread=Process(target=self.validator.loop)
-
         self.validator.start()
 
 
@@ -431,13 +434,17 @@ tf.lite.OpsSet.SELECT_TF_OPS]
 
         predictions=self.run_model()
 
-        output=MindOutputs()
+        self.last_output=MindOutputs()
 
-        output.set_from_norm(predictions[0][0][0],predictions[2][0][0],predictions[1][0][0],predictions[3][0][0])
+        self.last_output.set_from_norm(predictions[0][0][0],predictions[0][0][2],predictions[0][0][1],predictions[0][0][3])
 
-        self.validator.push(output)
+        return self.last_output
+    
+    def setMark(self,reward:float):
+        
+        frame=MindFrame(inputs=self.inputs,spectogram=self.spectogram,output=self.last_output,reward=reward)
 
-        return output
+        self.validator.push(frame)
     
     def stop(self):
         self.validator.kill()
