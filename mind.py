@@ -285,7 +285,7 @@ class Mind:
             return
         
         #a root 
-        audio_input_layer=layers.Input([None,249,129])
+        audio_input_layer=layers.Input([249,129,1])
 
         resizing=layers.Resizing(64,64)(audio_input_layer)
 
@@ -369,7 +369,7 @@ tf.lite.OpsSet.SELECT_TF_OPS]
 
         if lite:
 
-            self.lite_model.set_tensor(self.input_details[0]['index'],[[self.spectogram]])
+            self.lite_model.set_tensor(self.input_details[0]['index'],[self.spectogram])
 
             self.lite_model.set_tensor(self.input_details[1]['index'],[[self.inputs]])
 

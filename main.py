@@ -102,34 +102,35 @@ mind.init_model()
 
 with client.connect('127.0.0.1:5051') as channels:
 #if True:
-    stub=client.get_stub(channels)
+    while True:
+        stub=client.get_stub(channels)
 
-    msg=client.process_data(stub,data)
-    data=preprocess_data(msg,data)
+        msg=client.process_data(stub,data)
+        data=preprocess_data(msg,data)
 
-    emotions.clear()
+        emotions.clear()
 
-    for mod in modifiers:
-        mod.retriveData(data)
+        for mod in modifiers:
+            mod.retriveData(data)
 
-    for mod in modifiers:
-        mod.modify(emotions)
+        for mod in modifiers:
+            mod.modify(emotions)
 
-    select_mood(emotions)
+        data["spectogram"]=modifiers[0].get_spectogram()
 
-    mind.getData(data)
+        select_mood(emotions)
 
-    output=mind.loop()
+        mind.getData(data)
 
-    data["Motors"]["speedA"]=output.motor1()[0]
-    data["Motors"]["speedB"]=output.motor2()[0]
-    data["Motors"]["directionA"]=output.motor1()[1]
-    data["Motors"]["directionB"]=output.motor2()[1]
+        output=mind.loop()
 
-    curr_mood.loop()
+        data["Motors"]["speedA"]=output.motor1()[0]
+        data["Motors"]["speedB"]=output.motor2()[0]
+        data["Motors"]["directionA"]=output.motor1()[1]
+        data["Motors"]["directionB"]=output.motor2()[1]
 
-    print(str(emotions))
-    print("Outputs: ")
-    print(str(output.get()))
+        curr_mood.loop()
 
-mind.stop()
+        print(str(emotions))
+        print("Outputs: ")
+        print(str(output.get()))

@@ -20,10 +20,11 @@ class HearingCenter(EmotionModifier):
 
             self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
-            data["spectogram"]=self.hearing.get_last_spectogram()
-
         except:
             print("Audio data is missing!")
+
+    def get_spectogram(self):
+        return self.hearing.get_last_spectogram()
 
 
     def modify(self,emotions:EmotionTuple):
