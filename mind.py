@@ -131,8 +131,8 @@ class Franklin(Process):
 
         output.directionA=np.random.random()
         output.directionB=np.random.random()   
-        output.speedA=np.random.random()*0.5 
-        output.speedB=np.random.random()*0.5    
+        output.speedA=np.random.random()
+        output.speedB=np.random.random()  
 
     def analyze(self):
         '''analyze and remove/modify frames'''
@@ -165,10 +165,16 @@ class Franklin(Process):
 
         for frame in self.frames:
             inputs[0].append(frame.getInput()[0])
-            inputs[1].append([frame.getInput()[1]])
+            inputs[1].append(frame.getInput()[1])
             outputs.append(frame.getOutput().get_norm())
 
-        dataset=tf.data.Dataset.from_tensor_slices(({"input_1": inputs[0], "input_2": inputs[1]}, outputs))
+        dataset=tf.data.Dataset.from_tensor_slices(({"input_1": 
+                                                     np.array(inputs[0]).reshape(len(inputs[0]),249,129,1), 
+                                                     "input_2": 
+                                                     np.array(inputs[1]).reshape(len(inputs[1]),1,24)}, 
+                                                     np.array(outputs).reshape(len(outputs),4)))
+
+        #lengt_dataset = dataset.reduce(0, lambda x,_: x+1).numpy()
 
         train_ds=dataset
 
@@ -192,7 +198,7 @@ class Franklin(Process):
         converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS,
 tf.lite.OpsSet.SELECT_TF_OPS]
         
-        self.tflite=converter.convert()
+        self.tflite=tf.lite.Interpreter(converter.convert())
 
         with open(self.OUTPUT_PATH, 'wb') as f:
             f.write(self.tflite)
@@ -303,7 +309,7 @@ class Mind:
             return
         
         #a root 
-        audio_input_layer=layers.Input([249,129,1])
+        audio_input_layer=layers.Input(shape=(249,129,1))
 
         resizing=layers.Resizing(64,64)(audio_input_layer)
 
@@ -329,7 +335,7 @@ class Mind:
 
         reshape=tf.keras.layers.Reshape((1,13456))(audio_output)
 
-        input=tf.keras.layers.Input([None,len(self.inputs)])
+        input=tf.keras.layers.Input(shape=(None,len(self.inputs)))
 
         embed=tf.keras.layers.Concatenate()([input,reshape])
 
@@ -344,7 +350,7 @@ class Mind:
         self.model=tf.keras.Model(inputs=[audio_input_layer,input],outputs=output)
 
         self.model.compile(
-            loss=tf.keras.losses.BinaryCrossentropy(),
+            loss=tf.keras.losses.MeanAbsoluteError(),
             optimizer="adam",
             metrics=["accuracy"],
         )
