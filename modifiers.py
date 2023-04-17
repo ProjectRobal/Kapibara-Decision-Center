@@ -28,9 +28,9 @@ class HearingCenter(EmotionModifier):
 
 
     def modify(self,emotions:EmotionTuple):
-    
+        
         output=self.hearing.input(self.audio)
-
+        
         if output=="unsettling":
             emotions.unsettlement=1
         elif output=="pleasent":

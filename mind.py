@@ -81,7 +81,7 @@ class MindOutputs:
 class MindFrame:
     '''A pair of inputs and outputs of mind'''
     def __init__(self,inputs,spectogram,output:MindOutputs,reward:float) -> None:
-        self.input=(inputs,spectogram)
+        self.input=(spectogram,inputs)
 
         self.output=output
         self.reward=reward
@@ -96,7 +96,7 @@ class MindFrame:
         return self.reward
     
 class Franklin(Process):
-    QUEUE_SIZE=50
+    QUEUE_SIZE=25
     EPOCHES=50
     OUTPUT_PATH="mind.tflite"
 
@@ -130,13 +130,20 @@ class Franklin(Process):
         output:MindOutputs=frame.getOutput()
 
         output.directionA=np.random.random()
-        output.directionB=np.random.random()        
+        output.directionB=np.random.random()   
+        output.speedA=np.random.random()*0.5 
+        output.speedB=np.random.random()*0.5    
 
     def analyze(self):
         '''analyze and remove/modify frames'''
         last_answer:MindFrame=self.frames[0]
         trim=False
-        for frame in self.frames:
+
+        if last_answer.getReward()<0:
+            trim=True
+            self.mutate(last_answer)
+
+        for frame in self.frames[1:]:
             if trim:
                 self.frames.remove(frame)
             
@@ -148,17 +155,20 @@ class Franklin(Process):
 
             last_answer=frame
 
+        self.state=self.Status.TRAINING
+
     def train(self):
         '''train with fit function'''
 
-        inputs=[]
+        inputs=([],[])
         outputs=[]
 
         for frame in self.frames:
-            inputs.append(frame.getInput())
+            inputs[0].append(frame.getInput()[0])
+            inputs[1].append([frame.getInput()[1]])
             outputs.append(frame.getOutput().get_norm())
 
-        dataset=tf.data.Dataset.from_tensor_slices((inputs,outputs))
+        dataset=tf.data.Dataset.from_tensor_slices(({"input_1": inputs[0], "input_2": inputs[1]}, outputs))
 
         train_ds=dataset
 
@@ -187,6 +197,10 @@ tf.lite.OpsSet.SELECT_TF_OPS]
         with open(self.OUTPUT_PATH, 'wb') as f:
             f.write(self.tflite)
 
+        self.model.save(Mind.MIND_SAVE_PATH)
+
+        self.tflite.allocate_tensors()
+
         self.state=self.Status.DONE
 
     def get_tf_lite(self):
@@ -202,30 +216,34 @@ tf.lite.OpsSet.SELECT_TF_OPS]
     def reset(self):
         self.state=self.Status.COLLECTING
         self.frames.clear()
+
+    def _main(self):
+        try:
+            match self.state:
+                case self.Status.COLLECTING:
+                    return
+                case self.Status.ANALYZING:
+                    self.analyze()
+                case self.Status.TRAINING:
+                    self.train()
+                case self.Status.CONVERTING:
+                    self.convert()
+                case _:
+                    return
+        except Exception as e:
+            print(str(e))
+            self.reset()
         
     def loop(self):
         while self._run:
-            try:
-                match self.state:
-                    case self.Status.COLLECTING:
-                        continue
-                    case self.Status.ANALYZING:
-                        self.analyze()
-                    case self.Status.TRAINING:
-                        self.train()
-                    case self.Status.CONVERTING:
-                        self.convert()
-                    case _:
-                        continue
-            except Exception as e:
-                print(e)
-                self.reset()
+            self._main()
 
     def run(self) -> None:
         self.loop()
                 
 
 class Mind:
+    MIND_SAVE_PATH="model.tf"
 
     '''A class that represents decision model
     A inputs: 
@@ -331,6 +349,8 @@ class Mind:
             metrics=["accuracy"],
         )
 
+        self.model.save(self.MIND_SAVE_PATH)
+
         # try use tf lite model instead of normal model
 
         converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
@@ -354,7 +374,7 @@ tf.lite.OpsSet.SELECT_TF_OPS]
 
         self.validator=Franklin(self.model)
 
-        self.validator.start()
+        #self.validator.start()
 
 
     def train_test(self):
@@ -425,12 +445,10 @@ tf.lite.OpsSet.SELECT_TF_OPS]
     def loop(self)->MindOutputs:
 
         if self.validator.is_done():
-            self.lite_model= tf.lite.Interpreter(model_path=Franklin.OUTPUT_PATH)
 
+            self.lite_model=self.validator.get_tf_lite()
             self.input_details=self.lite_model.get_input_details()
             self.output_details=self.lite_model.get_output_details()
-
-            self.lite_model.allocate_tensors()
 
         predictions=self.run_model()
 

@@ -94,6 +94,7 @@ def placeholder_data(data:dict):
 
     return client.from_message_to_json(msg,data)
 
+iteration:int=0
 
 mind=Mind(emotions)
 
@@ -134,3 +135,10 @@ with client.connect('127.0.0.1:5051') as channels:
         print(str(emotions))
         print("Outputs: ")
         print(str(output.get()))
+
+        mind.setMark(emotions.estimate())
+
+        mind.validator._main()
+
+        print("Iteration: ",iteration)
+        iteration+=1
