@@ -22,7 +22,7 @@ def process(stub,speedA,directionA,speedB,directionB,angel1,angel2):
 
 def process_data(stub,data):
 
-    return process(stub,speedA=data["Motors"]["speedA"],directionA=data["Motors"]["directionA"],speedB=data["Motors"]["speedB"],directionB=data["Motors"]["directionB"],angel1=data["Servos"]["pwm1"],angel2=data["Servos"]["pwm2"])
+    return process(stub,speedA=data["Motors"]["speedA"],directionA=data["Motors"]["directionA"],speedB=data["Motors"]["speedB"],directionB=data["Motors"]["directionB"],angel1=data["Servos"]["pwm0"],angel2=data["Servos"]["pwm1"])
 
 
 def from_message_to_json(msg:Message,input:dict={})->dict:

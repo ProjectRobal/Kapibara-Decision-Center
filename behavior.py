@@ -8,15 +8,15 @@ class Emotion:
 
     def servo1(self,pwm=None):
         if pwm is None:
-            return self._servos["pwm1"]
+            return self._servos["pwm0"]
 
-        self._servos["pwm1"] = pwm
+        self._servos["pwm0"] = pwm
 
     def servo2(self,pwm=None):
         if pwm is None:
-            return self._servos["pwm2"]
+            return self._servos["pwm1"]
 
-        self._servos["pwm2"] = pwm
+        self._servos["pwm1"] = pwm
 
     def loop(self):
         pass
@@ -72,7 +72,7 @@ class Fear(Emotion):
             self.servo1(5)
             self.servo2(5)
 
-        if time.time_ns()/1000-self.last >= 100:
+        if time.time_ns()/1000-self.last >= 1:
             self.shrung=not self.shrung
             self.last=time.time_ns()/1000
 

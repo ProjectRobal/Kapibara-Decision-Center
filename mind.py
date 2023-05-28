@@ -9,6 +9,7 @@ import time
 
 from tensorflow.keras import layers
 from tensorflow.keras import models
+from transformer import TransformerBlock
 
 import math
 import os.path
@@ -183,9 +184,7 @@ class Franklin(Process):
         train_ds = train_ds.cache().prefetch(tf.data.AUTOTUNE)
 
         _ = self.model.fit(
-            train_ds,
-            epochs=self.EPOCHES
-            )
+            train_ds,batch_size=64,epochs=self.EPOCHES)
         
         self.state=self.Status.CONVERTING
 
@@ -260,8 +259,6 @@ class Mind:
         -floor
     *audio - mono,combined stereo
     *audio coefficent, wich audio channel is stronger
-    *10 last outputs
-
     A outputs:
 
 
@@ -293,20 +290,67 @@ class Mind:
         
         self.spectogram=None
 
-        self.lite_model=None
+        self.long_memory=None
 
-        self.validator=None
+        # a dictionary that stores pairs of ( (input,output), reward )
+        self.short_term_memory:list[MindFrame]=[]
 
-        self.validator_thread=None
+    def init_memory_model(self):
         
-        #self.inputs=self.inputs.reshape(len(self.inputs),1)
+        audio_input_layer=layers.Input(shape=(249,129,1))
+
+        resizing=layers.Resizing(64,64)(audio_input_layer)
+
+        # Instantiate the `tf.keras.layers.Normalization` layer.
+        norm_layer = layers.Normalization()
+        # Fit the state of the layer to the spectrograms
+        # with `Normalization.adapt`.
+        #norm_layer.adapt(data=dataset.map(map_func=lambda spec, label: spec))
+        
+        norm_layer(resizing)
+
+        conv1=layers.Conv2D(64, 3, activation='relu')(resizing)
+
+        conv2=layers.Conv2D(32, 3, activation='relu')(conv1)
+
+        conv3=layers.Conv2D(16, 3, activation='relu')(conv2)
+
+        maxpool=layers.MaxPooling2D()(conv3)
+
+        dropout1=layers.Dropout(0.25)(maxpool)
+
+        audio_output=layers.Flatten()(dropout1)
+
+        reshape=tf.keras.layers.Reshape((1,13456))(audio_output)
+
+        
+        input=tf.keras.layers.Input(shape=(1,len(self.inputs)))
+
+        embed=tf.keras.layers.Concatenate()([input,reshape])
+
+        layer1=tf.keras.layers.Dense(512,activation='linear')(embed)
+
+        layer2=tf.keras.layers.Dense(512,activation='linear')(layer1)
+
+        layer3=tf.keras.layers.Dense(64,activation='linear')(layer2)
+
+        output=tf.keras.layers.Dense(1,activation='linear')(layer3)
+
+        self.long_memory=tf.keras.Model(inputs=[audio_input_layer,input],outputs=output)
+
+        self.long_memory.compile(
+            #loss=tf.keras.losses.Huber(delta=1.0, reduction="auto", name="huber_loss"),
+            loss=tf.keras.losses.MeanSquaredError(),
+            #loss=tf.keras.losses.MeanAbsoluteError(),
+            optimizer="adam"
+        )
+
+
 
     
     def init_model(self):
-
-        if os.path.exists(MODEL_PATH):
-            self.model=tf.keras.models.load_model(MODEL_PATH)
-            return
+        '''init a decision model'''
+        
         
         #a root 
         audio_input_layer=layers.Input(shape=(249,129,1))
@@ -335,83 +379,69 @@ class Mind:
 
         reshape=tf.keras.layers.Reshape((1,13456))(audio_output)
 
-        input=tf.keras.layers.Input(shape=(None,len(self.inputs)))
+        
+        input=tf.keras.layers.Input(shape=(1,len(self.inputs)))
 
         embed=tf.keras.layers.Concatenate()([input,reshape])
 
-        layer1=tf.keras.layers.LSTM(512,return_sequences=True)(embed)
+        layer2=tf.keras.layers.Dense(256,activation='relu')(embed)
 
-        layer2=tf.keras.layers.LSTM(256,return_sequences=True)(layer1)
+        layer1=tf.keras.layers.Dense(64,activation='relu')(layer2)
 
-        layer3=tf.keras.layers.LSTM(64,return_sequences=True)(layer2)
-
-        output=tf.keras.layers.Dense(4,activation='relu')(layer3)
+        output=tf.keras.layers.Dense(4,activation='sigmoid')(layer1)
 
         self.model=tf.keras.Model(inputs=[audio_input_layer,input],outputs=output)
 
         self.model.compile(
-            loss=tf.keras.losses.MeanAbsoluteError(),
-            optimizer="adam",
-            metrics=["accuracy"],
+            loss=tf.keras.losses.Huber(delta=0.1, reduction="auto", name="huber_loss"),
+            #loss=tf.keras.losses.MeanSquaredError(),
+            #loss=tf.keras.losses.MeanAbsoluteError(),
+            optimizer="sgd"
         )
 
         self.model.save(self.MIND_SAVE_PATH)
 
         # try use tf lite model instead of normal model
 
-        converter=tf.lite.TFLiteConverter.from_keras_model(self.model)
-
-        converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        converter.experimental_new_converter=True
-        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS,
-tf.lite.OpsSet.SELECT_TF_OPS]
-
-        self.lite_model=tf.lite.Interpreter(model_content=converter.convert())
-        self.input_details=self.lite_model.get_input_details()
-        self.output_details=self.lite_model.get_output_details()
-
-        print("Inputs details: ")
-        print(self.input_details)
-
-        print("Outputs details: ")
-        print(self.output_details)
-
-        self.lite_model.allocate_tensors()
-
-        self.validator=Franklin(self.model)
-
-        #self.validator.start()
-
 
     def train_test(self):
 
-        x=np.random.random(len(self.inputs)*10).reshape(10,1,len(self.inputs))
-        y=np.random.random(4*10).reshape(10,4)
+        n=16
 
-        self.model.fit(x=x,y=y, batch_size=256,epochs=10)
+        x=np.random.random(len(self.inputs)*n).reshape(n,1,len(self.inputs))
+        spectogram=np.random.random(249*129*n).reshape(n,249,129,1)
+        y=np.random.random(n*4).reshape(n,4)
+
+        self.model.fit(x=(spectogram,x),y=y, batch_size=1024,epochs=5)
+
+    def train_memory_test(self):
+
+        n=100
+
+        x=np.random.random(len(self.inputs)*n).reshape(n,1,len(self.inputs))
+        spectogram=np.random.random(249*129*n).reshape(n,249,129,1)
+        y=np.random.random(n).reshape(n,1)*10
+
+        self.long_memory.fit(x=(spectogram,x),y=y, batch_size=1024,epochs=100)
 
 
-    def run_model(self,lite=True):
+    def run_model(self):
 
-        if lite:
-
-            self.lite_model.set_tensor(self.input_details[0]['index'],[self.spectogram])
-
-            self.lite_model.set_tensor(self.input_details[1]['index'],[[self.inputs]])
-
-            self.lite_model.invoke()
-
-            prediction=self.lite_model.get_tensor(self.output_details[0]['index'])
-
-            return prediction
-        else:
-            predictions=self.model((
-                                self.spectogram[None,tf.newaxis],
+        predictions=self.model((
+                                self.spectogram[tf.newaxis],
                                 self.inputs.reshape(1,1,len(self.inputs)),
                                 ),
                                 training=False)
                 
-            return predictions
+        return predictions
+    
+    def run_memory(self):
+
+        return self.long_memory((
+                                self.spectogram[tf.newaxis],
+                                self.inputs.reshape(1,1,len(self.inputs)),
+                                ),
+                                training=False)
         
         
 
@@ -449,12 +479,16 @@ tf.lite.OpsSet.SELECT_TF_OPS]
 
 
     def loop(self)->MindOutputs:
-
-        if self.validator.is_done():
-
-            self.lite_model=self.validator.get_tf_lite()
-            self.input_details=self.lite_model.get_input_details()
-            self.output_details=self.lite_model.get_output_details()
+        '''Work of a model:
+        1. Prediction of decision model
+        2. Get reward
+        3. Compare it with reward returned from memory model
+        4. When new reward is better than reward from memory model add it to short memory list
+        5. Otherwise apply slight modification and then add it to short memory list
+        6. Train decision model with one sample
+        7. After N samples train decision model based on samples from short memory lists
+        8. Repeat
+        '''
 
         predictions=self.run_model()
 
@@ -466,10 +500,4 @@ tf.lite.OpsSet.SELECT_TF_OPS]
     
     def setMark(self,reward:float):
         
-        frame=MindFrame(inputs=self.inputs,spectogram=self.spectogram,output=self.last_output,reward=reward)
-
-        self.validator.push(frame)
-    
-    def stop(self):
-        self.validator.kill()
-        self.validator.join()
+        self.short_term_memory.append(MindFrame(inputs=self.inputs,spectogram=self.spectogram,output=self.last_output,reward=reward))

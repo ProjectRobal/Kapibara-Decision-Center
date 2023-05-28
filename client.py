@@ -36,8 +36,8 @@ data:dict = {
     },
     "Servos":
     {
+        "pwm0":45,
         "pwm1":45,
-        "pwm2":45,
     }
 }
 
@@ -59,15 +59,16 @@ def select_mood(output):
     curr_mood=moods[output]
 
 
-with client.connect('192.168.89.216:5051') as channels:
+with client.connect('192.168.223.216:5051') as channels:
     stub=client.get_stub(channels)
     while True:
 
-        audio=mic.record(2)/32767.0
+        print("Send Command!")
+        msg=client.process_data(stub,data)
 
-        audio=filtfilt(b,a,audio)
+        client.from_message_to_json(msg,data)
 
-        audio=tf.cast(audio,dtype=tf.float32)
+        audio=(np.add(data["Ears"]["channel1"],data["Ears"]["channel2"],dtype=np.float32))/65534 
 
         output=model.input(audio)
         #output="nervous"
@@ -77,7 +78,7 @@ with client.connect('192.168.89.216:5051') as channels:
         curr_mood.loop()
         print(output)
 
-        print("Send Command!")
-        msg=client.process_data(stub,data)
+        
+
         #print(msg)
 

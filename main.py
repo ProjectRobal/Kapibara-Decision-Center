@@ -20,7 +20,7 @@ import numpy as np
 import behavior
 from emotions import EmotionModifier,EmotionTuple
 
-from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier,ShockModifier
+from modifiers import HearingCenter,FrontSensorModifier,FloorSensorModifier,ShockModifier,BoringModifier
 
 from mind import Mind,MindOutputs
 
@@ -59,7 +59,8 @@ modifiers:list[EmotionModifier]=[
     HearingCenter(),
     FrontSensorModifier("Distance_Front"),
     FloorSensorModifier("Distance_Floor"),
-    ShockModifier()
+    ShockModifier(),
+    BoringModifier()
 ]
 
 
@@ -100,6 +101,30 @@ mind=Mind(emotions)
 
 mind.init_model()
 
+mind.init_memory_model()
+
+start=timer()
+
+mind.train_test()
+
+print("Time: ",timer()-start," s")
+
+placeholder_data(data)
+
+data["spectogram"]=np.random.random(249*129).reshape(249,129,1)
+
+mind.getData(data)
+
+start=timer()
+
+print(mind.run_memory())
+
+print("Time: ",timer()-start," s")
+
+#mind.setMark(2)
+
+
+exit()
 
 with client.connect('127.0.0.1:5051') as channels:
 #if True:
@@ -130,6 +155,8 @@ with client.connect('127.0.0.1:5051') as channels:
         data["Motors"]["directionA"]=output.motor1()[1]
         data["Motors"]["directionB"]=output.motor2()[1]
 
+
+        # in finall version it will run in sperate thread probably
         curr_mood.loop()
 
         print(str(emotions))
@@ -137,8 +164,6 @@ with client.connect('127.0.0.1:5051') as channels:
         print(str(output.get()))
 
         mind.setMark(emotions.estimate())
-
-        mind.validator._main()
 
         print("Iteration: ",iteration)
         iteration+=1

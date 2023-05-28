@@ -5,12 +5,32 @@ import time
 
 STEP_TIME=0.01
 
+class BoringModifier(EmotionModifier):
+    BORING_TIME=20
+
+    def __init__(self) -> None:
+        self.last_movement=np.zeros(3,dtype=np.float32)
+        self.last_time=time.time()
+
+    def retriveData(self, data: dict):
+        
+        self.last_movement=data["Gyroscope"]["acceleration"]
+
+    def modify(self,emotions:EmotionTuple):
+        
+        if np.mean(self.last_movement)==0:
+            emotions.boredom=(time.time()-self.last_time)/self.BORING_TIME
+        else:
+            emotions.boredom=0
+            self.last_time=time.time()
+
 class HearingCenter(EmotionModifier):
     '''modifiers with KapibaraAudio model'''
     def __init__(self) -> None:
         super().__init__()
         self.hearing=KapibaraAudio('./hearing.tflite')
         self.audio=np.zeros(BUFFER_SIZE,np.int16)
+        self.average:float=0
     
     def retriveData(self,data:dict):
         try:
@@ -20,25 +40,26 @@ class HearingCenter(EmotionModifier):
 
             self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
+            self.average:float=np.mean(self.audio)
+
         except:
             print("Audio data is missing!")
 
     def get_spectogram(self):
         return self.hearing.get_last_spectogram()
 
-
     def modify(self,emotions:EmotionTuple):
         
         output=self.hearing.input(self.audio)
         
         if output=="unsettling":
-            emotions.unsettlement=1
+            emotions.unsettlement=self.average
         elif output=="pleasent":
-            emotions.pleasure=1
+            emotions.pleasure=self.average
         elif output=="scary":
-            emotions.fear=1
+            emotions.fear=self.average
         elif output=="nervous":
-            emotions.anger=1
+            emotions.anger=self.average
 
     
 
