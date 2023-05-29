@@ -101,7 +101,9 @@ mind=Mind(emotions)
 
 mind.init_model()
 
-mind.init_memory_model()
+start=timer()
+
+print("Time: ",timer()-start," s")
 
 start=timer()
 
@@ -117,7 +119,7 @@ mind.getData(data)
 
 start=timer()
 
-print(mind.run_memory())
+print(mind.run_model())
 
 print("Time: ",timer()-start," s")
 
