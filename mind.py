@@ -16,6 +16,7 @@ import os.path
 from timeit import default_timer as timer
 import threading
 from multiprocessing import Process
+import copy
 
 
 MODEL_PATH='mind.tf'
@@ -36,18 +37,25 @@ class MindOutputs:
 
     MAX_INPUT_VALUE=4294967295.0
 
-    def __init__(self,speedA:int=0,speedB:int=0,directionA:int=0,directionB:int=0) -> None:
+    def __init__(self,speedA:int=0,speedB:int=0,directionA:int=0,directionB:int=0,reward:float=0) -> None:
         self.speedA=speedA
         self.directionA=directionA
 
         self.speedB=speedB
         self.directionB=directionB
+        self.reward=reward
 
     def get(self)->tuple[float]:
         return (self.speedA,self.speedB,self.directionA,self.directionB)
     
     def get_norm(self)->tuple[float]:
         return (self.speedA/100.0,self.speedB/100.0,self.directionA/4.0,self.directionB/4.0)
+    
+    def get_reward(self)->float:
+        return self.reward
+    
+    def set_reward(self,reward:float):
+        self.reward=reward
     
     def set_from_norm(self,speedA:float,speedB:float,directionA:float,directionB:float):
 
@@ -95,6 +103,47 @@ class MindFrame:
     def getReward(self):
         return self.reward
                 
+
+SHORT_MEMORY_CAPACITY=200
+
+class MindDataset:
+    def __init__(self):
+        self.spectograms=np.zeros((SHORT_MEMORY_CAPACITY,249,129,1))
+        self.inputs=np.zeros((SHORT_MEMORY_CAPACITY,1,24))
+        self.outputs=np.zeros((SHORT_MEMORY_CAPACITY,4))
+        self.rewards=np.zeros(SHORT_MEMORY_CAPACITY)
+        self.i=0
+
+    def push(self,input,spectogram,output,reward):
+        self.i=self.i%SHORT_MEMORY_CAPACITY
+
+        self.inputs[self.i]=input.reshape((1,24))
+        self.spectograms[self.i]=spectogram
+        self.outputs[self.i]=output
+        self.rewards[self.i]=reward
+
+        self.i=self.i+1
+
+
+    def clear(self):
+        self.spectograms=np.zeros((SHORT_MEMORY_CAPACITY,249,129,1))
+        self.inputs=np.zeros((SHORT_MEMORY_CAPACITY,1,24))
+        self.outputs=np.zeros((SHORT_MEMORY_CAPACITY,4))
+        self.rewards=np.zeros(SHORT_MEMORY_CAPACITY)
+        self.i=0
+
+    def full(self):
+        return self.i==SHORT_MEMORY_CAPACITY
+
+    def len(self):
+        return self.i
+    
+    def y(self):
+        return (self.outputs,self.rewards)
+    
+    def x(self):
+        return (self.spectograms,self.inputs)
+
 
 class Mind:
     MIND_SAVE_PATH="model.tf"
@@ -144,7 +193,8 @@ class Mind:
         self.long_memory=None
 
         # a dictionary that stores pairs of ( (input,output), reward )
-        self.short_term_memory:list[MindFrame]=[]
+        self.short_term_memory=MindDataset()
+
     
     def init_model(self):
         '''init a decision model'''
@@ -257,16 +307,43 @@ class Mind:
         self.spectogram=data["spectogram"]
 
 
+    def process_train(self,model,x,y):
+
+        model.fit(x=x,y=y, batch_size=16,epochs=20,verbose=0)
+
+        self.model=model
+
+    def memorize(self):
+        '''
+        A function that do memorizing step
+        '''
+        if not self.short_term_memory.full():
+            return
+
+        x=copy.deepcopy(self.short_term_memory.x())
+
+        y=copy.deepcopy(self.short_term_memory.y())
+
+        self.short_term_memory.clear()
+
+        #train_model=tf.keras.models.clone_model(self.model)
+
+        trainer=Process(target=self.process_train,args=(self.model,x,y,))
+
+        trainer.start()
+
+        #trainer.join()
+
+        
     def loop(self)->MindOutputs:
         '''Work of a model:
         1. Prediction of decision model
         2. Get reward
-        3. Compare it with reward returned from memory model
-        4. When new reward is better than reward from memory model add it to short memory list
+        3. Compare it with reward returned from model
+        4. When new reward is better than reward from model, add it to short memory list
         5. Otherwise apply slight modification and then add it to short memory list
-        6. Train decision model with one sample
-        7. After N samples train decision model based on samples from short memory lists
-        8. Repeat
+        6. After N samples train decision model based on samples from short memory lists
+        7. Repeat
 
         * Run trainings in seaperate networks
         '''
@@ -275,10 +352,12 @@ class Mind:
 
         self.last_output=MindOutputs()
 
-        self.last_output.set_from_norm(predictions[0][0][0],predictions[0][0][2],predictions[0][0][1],predictions[0][0][3])
+        self.last_output.set_from_norm(predictions[0][0][0][0],predictions[0][0][0][2],predictions[0][0][0][1],predictions[0][0][0][3])
+
+        self.last_output.set_reward(predictions[1][0][0][0])
 
         return self.last_output
-    
-    def setMark(self,reward:float):
-        
-        self.short_term_memory.append(MindFrame(inputs=self.inputs,spectogram=self.spectogram,output=self.last_output,reward=reward))
+            
+    def setMark(self,reward):
+
+        self.short_term_memory.push(self.inputs,self.spectogram,self.last_output.get_norm(),reward)

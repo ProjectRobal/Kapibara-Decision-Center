@@ -107,7 +107,7 @@ print("Time: ",timer()-start," s")
 
 start=timer()
 
-mind.train_test()
+#mind.train_test()
 
 print("Time: ",timer()-start," s")
 
@@ -119,12 +119,22 @@ mind.getData(data)
 
 start=timer()
 
-print(mind.run_model())
+print(mind.loop())
 
 print("Time: ",timer()-start," s")
 
-#mind.setMark(2)
+for x in range(200):
 
+    mind.setMark(2)
+
+
+mind.memorize()
+
+start=timer()
+
+print(mind.loop())
+
+print("Time: ",timer()-start," s")
 
 exit()
 
