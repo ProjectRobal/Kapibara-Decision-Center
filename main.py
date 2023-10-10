@@ -36,8 +36,8 @@ data:dict = {
     },
     "Servos":
     {
+        "pwm0":45,
         "pwm1":45,
-        "pwm2":45,
     }
 }
 
@@ -101,42 +101,6 @@ mind=Mind(emotions)
 
 mind.init_model()
 
-start=timer()
-
-print("Time: ",timer()-start," s")
-
-start=timer()
-
-#mind.train_test()
-
-print("Time: ",timer()-start," s")
-
-placeholder_data(data)
-
-data["spectogram"]=np.random.random(249*129).reshape(249,129,1)
-
-mind.getData(data)
-
-start=timer()
-
-print(mind.loop())
-
-print("Time: ",timer()-start," s")
-
-for x in range(200):
-
-    mind.setMark(2)
-
-
-mind.memorize()
-
-start=timer()
-
-print(mind.loop())
-
-print("Time: ",timer()-start," s")
-
-exit()
 
 with client.connect('127.0.0.1:5051') as channels:
 #if True:
@@ -175,7 +139,14 @@ with client.connect('127.0.0.1:5051') as channels:
         print("Outputs: ")
         print(str(output.get()))
 
-        mind.setMark(emotions.estimate())
+        reward=emotions.estimate()
+
+        print("Current reward: ",reward)
+        print("Memorized reward: ",output.reward)
+
+        mind.setMark(reward)
+
+        mind.memorize()
 
         print("Iteration: ",iteration)
         iteration+=1

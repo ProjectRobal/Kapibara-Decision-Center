@@ -3,6 +3,8 @@ from kapibara_audio import KapibaraAudio,BUFFER_SIZE
 import numpy as np
 import time
 
+import psutil
+
 STEP_TIME=0.01
 
 class BoringModifier(EmotionModifier):
@@ -15,10 +17,11 @@ class BoringModifier(EmotionModifier):
     def retriveData(self, data: dict):
         
         self.last_movement=data["Gyroscope"]["acceleration"]
+        self.last_rotation=data["Gyroscope"]["gyroscope"]
 
     def modify(self,emotions:EmotionTuple):
         
-        if np.mean(self.last_movement)==0:
+        if np.mean(self.last_movement)==0 and np.mean(self.last_rotation)==0:
             emotions.boredom=(time.time()-self.last_time)/self.BORING_TIME
         else:
             emotions.boredom=0
@@ -28,9 +31,12 @@ class HearingCenter(EmotionModifier):
     '''modifiers with KapibaraAudio model'''
     def __init__(self) -> None:
         super().__init__()
+        before=psutil.virtual_memory()[3]/1000000000
+        #print('RAM Used before (GB):', before)
         self.hearing=KapibaraAudio('./hearing.tflite')
         self.audio=np.zeros(BUFFER_SIZE,np.int16)
         self.average:float=0
+        print('RAM Used (GB):', psutil.virtual_memory()[3]/1000000000 - before)
     
     def retriveData(self,data:dict):
         try:
@@ -40,7 +46,7 @@ class HearingCenter(EmotionModifier):
 
             self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
-            self.average:float=np.mean(self.audio)
+            self.average:float=np.mean((self.audio+1.0)/2.0)
 
         except:
             print("Audio data is missing!")

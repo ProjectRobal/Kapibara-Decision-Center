@@ -2,7 +2,7 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 
-import _grpc.rc_service_pb2 as rc__service__pb2
+from . import rc_service_pb2 as rc__service__pb2
 
 
 class RCRobotStub(object):

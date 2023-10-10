@@ -10,6 +10,7 @@ import time
 from tensorflow.keras import layers
 from tensorflow.keras import models
 
+
 import math
 import os.path
 
@@ -119,7 +120,7 @@ class MindDataset:
 
         self.inputs[self.i]=input.reshape((1,24))
         self.spectograms[self.i]=spectogram
-        self.outputs[self.i]=output
+        self.outputs[self.i]=np.array(output)*100.0
         self.rewards[self.i]=reward
 
         self.i=self.i+1
@@ -198,6 +199,9 @@ class Mind:
     
     def init_model(self):
         '''init a decision model'''
+
+        if os.path.exists(MODEL_PATH):
+            self.model=tf.keras.models.load_model(MODEL_PATH)
         
         
         #a root 
@@ -236,22 +240,21 @@ class Mind:
 
         layer1=tf.keras.layers.Dense(64,activation='linear')(layer2)
 
-        output=tf.keras.layers.Dense(4,activation='sigmoid',name="output")(layer1)
+        output=tf.keras.layers.Dense(4,activation='relu',name="output")(layer1)
 
         reward=tf.keras.layers.Dense(1,activation="linear",name="reward")(layer1)
 
         self.model=tf.keras.Model(inputs=[audio_input_layer,input],outputs=[output,reward])
 
+
         self.model.compile(
             loss=tf.keras.losses.Huber(delta=0.9, reduction="auto", name="huber_loss"),
             #loss=tf.keras.losses.MeanSquaredError(),
-            #loss=tf.keras.losses.MeanAbsoluteError(),
+            #loss=tf.keras.losses.MeanAbsoluteError(),s
             optimizer="adam"
         )
 
-        self.model.save(self.MIND_SAVE_PATH)
-
-        # try use tf lite model instead of normal model
+        self.model.save(MODEL_PATH)
 
 
     def train_test(self):
@@ -311,7 +314,7 @@ class Mind:
 
         model.fit(x=x,y=y, batch_size=16,epochs=20,verbose=0)
 
-        self.model=model
+        model.save(MODEL_PATH)
 
     def memorize(self):
         '''
@@ -328,9 +331,11 @@ class Mind:
 
         #train_model=tf.keras.models.clone_model(self.model)
 
-        trainer=Process(target=self.process_train,args=(self.model,x,y,))
+        #trainer=Process(target=self.process_train,args=(self.model,x,y,))
 
-        trainer.start()
+        #trainer.start()
+
+        self.process_train(self.model,x,y)
 
         #trainer.join()
 
@@ -352,12 +357,20 @@ class Mind:
 
         self.last_output=MindOutputs()
 
-        self.last_output.set_from_norm(predictions[0][0][0][0],predictions[0][0][0][2],predictions[0][0][0][1],predictions[0][0][0][3])
+        outputs=((np.array(predictions[0])/100.0)%1).reshape(4)
+
+        self.last_output.set_from_norm(outputs[0],
+                                       outputs[2]
+                                       ,outputs[1]
+                                       ,outputs[3])
 
         self.last_output.set_reward(predictions[1][0][0][0])
 
         return self.last_output
             
     def setMark(self,reward):
+
+        if reward < self.last_output.reward or reward < 0:
+            self.last_output.set_from_norm(np.random.random(),np.random.random(),np.random.random(),np.random.random())
 
         self.short_term_memory.push(self.inputs,self.spectogram,self.last_output.get_norm(),reward)
