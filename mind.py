@@ -7,9 +7,11 @@ from emotions import EmotionTuple
 import tensorflow as tf
 import time
 
-from tensorflow.keras import layers
-from tensorflow.keras import models
-
+from KCN.network import Network
+from KCN.layer import RecurrentLayer
+from KCN.activation.sigmoid import Sigmoid
+from KCN.activation.linear import Linear
+from KCN.activation.relu import Relu
 
 import math
 import os.path
@@ -19,8 +21,8 @@ import threading
 from multiprocessing import Process
 import copy
 
+import cv2
 
-MODEL_PATH='mind.tf'
 
 '''
 Gyroscope is now change of rotation,
@@ -31,12 +33,10 @@ Accelration is now a change of position
 DISTANCE_MAX_VAL=2048.0 # in mm
 MAX_ANGEL=360.0
 
-FLOOR_SENSORS_COUNT=8
-FRONT_SENSORS_COUNT=8
+FLOOR_SENSORS_COUNT=1
+FRONT_SENSORS_COUNT=2
 
 class MindOutputs:
-
-    MAX_INPUT_VALUE=4294967295.0
 
     def __init__(self,speedA:int=0,speedB:int=0,directionA:int=0,directionB:int=0,reward:float=0) -> None:
         self.speedA=speedA
@@ -58,26 +58,18 @@ class MindOutputs:
     def set_reward(self,reward:float):
         self.reward=reward
     
-    def set_from_norm(self,speedA:float,speedB:float,directionA:float,directionB:float):
+    def set_from(self,speedA:float,speedB:float,directionA:float,directionB:float):
 
         self.speedA=speedA*100.0
         self.speedB=speedB*100.0
 
-        if directionA>=0 and directionA<0.25:
-            self.directionA=0
-        elif directionA>=0.25 and directionA<0.5:
-            self.directionA=1
-        elif directionA>=0.5 and directionA<0.75:
-            self.directionA=2
+        if directionA>3:
+            self.directionA=directionA
         else:
             self.directionA=3
         
-        if directionB>=0 and directionB<0.25:
-            self.directionB=0
-        elif directionB>=0.25 and directionB<0.5:
-            self.directionB=1
-        elif directionB>=0.5 and directionB<0.75:
-            self.directionB=2
+        if directionB>3:
+            self.directionB=directionB
         else:
             self.directionB=3
 
@@ -105,49 +97,7 @@ class MindFrame:
         return self.reward
                 
 
-SHORT_MEMORY_CAPACITY=200
-
-class MindDataset:
-    def __init__(self):
-        self.spectograms=np.zeros((SHORT_MEMORY_CAPACITY,249,129,1))
-        self.inputs=np.zeros((SHORT_MEMORY_CAPACITY,1,24))
-        self.outputs=np.zeros((SHORT_MEMORY_CAPACITY,4))
-        self.rewards=np.zeros(SHORT_MEMORY_CAPACITY)
-        self.i=0
-
-    def push(self,input,spectogram,output,reward):
-        self.i=self.i%SHORT_MEMORY_CAPACITY
-
-        self.inputs[self.i]=input.reshape((1,24))
-        self.spectograms[self.i]=spectogram
-        self.outputs[self.i]=np.array(output)*100.0
-        self.rewards[self.i]=reward
-
-        self.i=self.i+1
-
-
-    def clear(self):
-        self.spectograms=np.zeros((SHORT_MEMORY_CAPACITY,249,129,1))
-        self.inputs=np.zeros((SHORT_MEMORY_CAPACITY,1,24))
-        self.outputs=np.zeros((SHORT_MEMORY_CAPACITY,4))
-        self.rewards=np.zeros(SHORT_MEMORY_CAPACITY)
-        self.i=0
-
-    def full(self):
-        return self.i==SHORT_MEMORY_CAPACITY
-
-    def len(self):
-        return self.i
-    
-    def y(self):
-        return (self.outputs,self.rewards)
-    
-    def x(self):
-        return (self.spectograms,self.inputs)
-
-
 class Mind:
-    MIND_SAVE_PATH="model.tf"
 
     '''A class that represents decision model
     A inputs: 
@@ -167,9 +117,6 @@ class Mind:
 
     def __init__(self,emotions:EmotionTuple) -> None:
 
-
-        self.last_outputs=np.array([MindOutputs(0,0,0,0)]*10)
-
         self.gyroscope=np.zeros(3,dtype=np.float32)
         self.accelerometer=np.zeros(3,dtype=np.float32)
 
@@ -184,193 +131,77 @@ class Mind:
         self.emotions=emotions
 
         ''' 0...2 gyroscope, 3...5 accelerometer, 6...7 audio coefficient, floor_sensors, 
-        front_sensors, spectogram'''
+        front_sensors, spectogram, 2 outputs from second network'''
 
-        self.inputs=np.ndarray(len(self.gyroscope)+len(self.accelerometer)+
-                               len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT,dtype=np.float32)
+        self.input_size=len(self.gyroscope)+len(self.accelerometer)+len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT+4
+
+        self.inputs=np.ndarray(self.input_size,dtype=np.float32)
+        self.last_left_output=np.zeros(4,dtype=np.float32)
+        self.last_right_output=np.zeros(4,dtype=np.float32)
+
+        self.left_network=Network(self.input_size)
+
+        self.left_network.addLayer(256,16,RecurrentLayer)
+        self.left_network.addLayer(4,8,RecurrentLayer,[Sigmoid,Sigmoid,Sigmoid,Relu])
+
+        self.right_network=Network(self.input_size)
+
+        self.right_network.addLayer(256,16,RecurrentLayer)
+        self.right_network.addLayer(4,8,RecurrentLayer,[Sigmoid,Sigmoid,Sigmoid,Relu])
         
         self.spectogram=None
-
-        self.long_memory=None
-
-        # a dictionary that stores pairs of ( (input,output), reward )
-        self.short_term_memory=MindDataset()
-
-    
-    def init_model(self):
-        '''init a decision model'''
-
-        if os.path.exists(MODEL_PATH):
-            self.model=tf.keras.models.load_model(MODEL_PATH)
-        
-        
-        #a root 
-        audio_input_layer=layers.Input(shape=(249,129,1))
-
-        resizing=layers.Resizing(32,32)(audio_input_layer)
-
-        # Instantiate the `tf.keras.layers.Normalization` layer.
-        norm_layer = layers.Normalization()
-        # Fit the state of the layer to the spectrograms
-        # with `Normalization.adapt`.
-        #norm_layer.adapt(data=dataset.map(map_func=lambda spec, label: spec))
-        
-        norm_layer(resizing)
-
-        conv1=layers.Conv2D(64, 3, activation='linear')(resizing)
-
-        conv2=layers.Conv2D(32, 3, activation='linear')(conv1)
-
-        conv3=layers.Conv2D(16, 3, activation='linear')(conv2)
-
-        maxpool=layers.MaxPooling2D()(conv3)
-
-        dropout1=layers.Dropout(0.25)(maxpool)
-
-        audio_output=layers.Flatten()(dropout1)
-
-        reshape=tf.keras.layers.Reshape((1,2704))(audio_output)
-
-        
-        input=tf.keras.layers.Input(shape=(1,len(self.inputs)))
-
-        embed=tf.keras.layers.Concatenate()([input,reshape])
-
-        layer2=tf.keras.layers.Dense(256,activation='linear')(embed)
-
-        layer1=tf.keras.layers.Dense(64,activation='linear')(layer2)
-
-        output=tf.keras.layers.Dense(4,activation='relu',name="output")(layer1)
-
-        reward=tf.keras.layers.Dense(1,activation="linear",name="reward")(layer1)
-
-        self.model=tf.keras.Model(inputs=[audio_input_layer,input],outputs=[output,reward])
-
-
-        self.model.compile(
-            loss=tf.keras.losses.Huber(delta=0.9, reduction="auto", name="huber_loss"),
-            #loss=tf.keras.losses.MeanSquaredError(),
-            #loss=tf.keras.losses.MeanAbsoluteError(),s
-            optimizer="adam"
-        )
-
-        self.model.save(MODEL_PATH)
-
-
-    def train_test(self):
-
-        n=200
-
-        x=np.random.random(len(self.inputs)*n).reshape(n,1,len(self.inputs))
-        spectogram=np.random.random(249*129*n).reshape(n,249,129,1)
-        y=np.random.random(n*4).reshape(n,4)
-        r=np.random.random(n).reshape(n,1)*10
-
-        self.model.fit(x=(spectogram,x),y=(y,r), batch_size=16,epochs=20)
-
-    def run_model(self):
-
-        predictions=self.model((
-                                self.spectogram[tf.newaxis],
-                                self.inputs.reshape(1,1,len(self.inputs)),
-                                ),
-                                training=False)
-                
-        return predictions
-        
-        
 
     def getData(self,data:dict):
 
         self.inputs[0:3]=data["Gyroscope"]["gyroscope"]/MAX_ANGEL
         self.inputs[4:7]=data["Gyroscope"]["acceleration"]/DISTANCE_MAX_VAL
 
-        self.inputs[10]=data["Distance_Front"]["distance"]/8160.0
+        self.inputs[8]=data["Distance_Front"]["distance"]/8160.0
+        self.inputs[9]=data["Distance_Front1"]["distance"]/8160.0
 
-        self.inputs[18]=data["Distance_Floor"]["distance"]/8160.0
+        self.inputs[10]=data["Distance_Floor"]["distance"]/8160.0
 
         left:np.array=np.array(data["Ears"]["channel1"],dtype=np.float32)/32767.0
         right:np.array=np.array(data["Ears"]["channel2"],dtype=np.float32)/32767.0
 
         self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
-        m:float=np.mean(self.audio)
+        m:float=np.max(self.audio)
 
-        l:float=np.mean(left)
-        r:float=np.mean(right)
+        l:float=np.max(left)
+        r:float=np.max(right)
 
         if m==0:
             self.audio_coff=(0.0,0.0)
         else:
             self.audio_coff=(l/m,r/m)
 
-        self.inputs[8]=self.audio_coff[0]
-        self.inputs[9]=self.audio_coff[1]
+        self.inputs[11]=self.audio_coff[0]
+        self.inputs[12]=self.audio_coff[1]
 
         self.spectogram=data["spectogram"]
 
-
-    def process_train(self,model,x,y):
-
-        model.fit(x=x,y=y, batch_size=16,epochs=20,verbose=0)
-
-        model.save(MODEL_PATH)
-
-    def memorize(self):
-        '''
-        A function that do memorizing step
-        '''
-        if not self.short_term_memory.full():
-            return
-
-        x=copy.deepcopy(self.short_term_memory.x())
-
-        y=copy.deepcopy(self.short_term_memory.y())
-
-        self.short_term_memory.clear()
-
-        #train_model=tf.keras.models.clone_model(self.model)
-
-        #trainer=Process(target=self.process_train,args=(self.model,x,y,))
-
-        #trainer.start()
-
-        self.process_train(self.model,x,y)
-
-        #trainer.join()
+        self.inputs[13:]=self.spectogram.resize(32*32,)
 
         
     def loop(self)->MindOutputs:
-        '''Work of a model:
-        1. Prediction of decision model
-        2. Get reward
-        3. Compare it with reward returned from model
-        4. When new reward is better than reward from model, add it to short memory list
-        5. Otherwise apply slight modification and then add it to short memory list
-        6. After N samples train decision model based on samples from short memory lists
-        7. Repeat
 
-        * Run trainings in seaperate networks
-        '''
+        self.inputs[self.input_size-2:]=self.last_right_output[:]
+        self.last_left_output[:]=self.left_network(self.inputs)
 
-        predictions=self.run_model()
 
+        self.inputs[self.input_size-2:]=self.last_left_output[:]
+        self.last_right_output[:]=self.right_network(self.inputs)
+        
         self.last_output=MindOutputs()
 
-        outputs=((np.array(predictions[0])/100.0)%1).reshape(4)
-
-        self.last_output.set_from_norm(outputs[0],
-                                       outputs[2]
-                                       ,outputs[1]
-                                       ,outputs[3])
-
-        self.last_output.set_reward(predictions[1][0][0][0])
+        self.last_output.set_from(self.last_left_output[3],self.last_right_output[3],
+                                  np.argmax(self.last_left_output[:2]),np.argmax(self.last_right_output[:2]))
 
         return self.last_output
             
-    def setMark(self,reward):
+    def setMark(self,reward:float):
 
-        if reward < self.last_output.reward or reward < 0:
-            self.last_output.set_from_norm(np.random.random(),np.random.random(),np.random.random(),np.random.random())
-
-        self.short_term_memory.push(self.inputs,self.spectogram,self.last_output.get_norm(),reward)
+        self.left_network.evalute(reward)
+        
+        self.right_network.evalute(reward)

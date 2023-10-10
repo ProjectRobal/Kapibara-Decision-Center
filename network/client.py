@@ -29,6 +29,7 @@ def from_message_to_json(msg:Message,input:dict={})->dict:
     output=input
     
     front:DistanceSensor=msg.front
+    front1:DistanceSensor=msg.front1
     floor:DistanceSensor=msg.floor
     gyroscope:Gyroscope=msg.gyroscope
     left:AudioChunk=msg.left
@@ -36,6 +37,9 @@ def from_message_to_json(msg:Message,input:dict={})->dict:
 
     output["Distance_Front"]={
         "distance":front.distance
+    }
+    output["Distance_Front1"]={
+        "distance":front1.distance
     }
     output["Distance_Floor"]={
         "distance":floor.distance

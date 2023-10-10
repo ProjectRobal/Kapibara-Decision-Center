@@ -141,12 +141,7 @@ with client.connect('127.0.0.1:5051') as channels:
 
         reward=emotions.estimate()
 
-        print("Current reward: ",reward)
-        print("Memorized reward: ",output.reward)
-
         mind.setMark(reward)
-
-        mind.memorize()
 
         print("Iteration: ",iteration)
         iteration+=1
