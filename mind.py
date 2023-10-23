@@ -127,6 +127,7 @@ class Mind:
     def __init__(self,emotions:EmotionTuple) -> None:
 
         self.last_eval:float=0.0
+        self.last_rewad:float=0.0
 
         self.gyroscope=np.zeros(3,dtype=np.float32)
         self.accelerometer=np.zeros(3,dtype=np.float32)
@@ -146,39 +147,45 @@ class Mind:
 
         self.input_size=len(self.gyroscope)+len(self.accelerometer)+len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT+4+(32*32)+1
 
-        self.initializer=GaussInit(0,0.01)
-        self.initializer1=GaussInit(0,2.5)
+        self.initializer=GaussInit(0,0.001)
+        self.initializer1=GaussInit(0,2.0)
 
         self.inputs=np.ndarray(self.input_size,dtype=np.float64)
         self.last_left_output=np.zeros(4,dtype=np.float64)
         self.last_right_output=np.zeros(4,dtype=np.float64)
 
         self.left_network=Network(self.input_size)
+        self.left_network.last_eval=0
         self.left_network.setTrendFunction(self.TrendFunction)
 
         self.left_network.addLayer(256,16,RecurrentLayer,[Relu]*256,self.initializer)
 
         self.left_network_motors=Network(256)
+        self.left_network_motors.last_eval=0
         self.left_network_motors.setTrendFunction(self.TrendFunction)
 
         self.left_network_motors.addLayer(1,4,RecurrentLayer,[Relu],self.initializer1)
 
         self.left_network_dir=Network(256)
+        self.left_network_dir.last_eval=0
         self.left_network_dir.setTrendFunction(self.TrendFunction)
 
         self.left_network_dir.addLayer(3,4,RecurrentLayer,[Relu,Relu,Relu],self.initializer)
 
         self.right_network=Network(self.input_size)
+        self.right_network.last_eval=0
         self.right_network.setTrendFunction(self.TrendFunction)
 
         self.right_network.addLayer(256,16,RecurrentLayer,[Relu]*256,self.initializer)
 
         self.right_network_motors=Network(256)
+        self.right_network_motors.last_eval=0
         self.right_network_motors.setTrendFunction(self.TrendFunction)
 
         self.right_network_motors.addLayer(1,4,RecurrentLayer,[Relu],self.initializer1)
 
         self.right_network_dir=Network(256)
+        self.right_network_dir.last_eval=0
         self.right_network_dir.setTrendFunction(self.TrendFunction)
 
         self.right_network_dir.addLayer(3,4,RecurrentLayer,[Relu,Relu,Relu],self.initializer)
@@ -229,9 +236,9 @@ class Mind:
 
     def TrendFunction(self,eval:float,network:Network)->float:
 
-        out:float=self.eval_filter(eval-self.last_eval)
+        out:float=self.eval_filter(eval-network.last_eval)
 
-        self.last_eval=eval
+        network.last_eval=eval
 
         print("dEval: ",out)
 
@@ -271,10 +278,20 @@ class Mind:
             
     def setMark(self,reward:float):
 
-        self.left_network.evalute(reward)
-        self.left_network_dir.evalute(reward)
-        self.left_network_motors.evalute(reward)
+        R:float=0
 
-        self.right_network.evalute(reward)
-        self.right_network_dir.evalute(reward)
-        self.right_network_motors.evalute(reward)
+        if reward>0:
+            R=200
+        else:
+            R=1000.0*(reward-self.last_rewad)
+
+
+        self.left_network.evalute(R)
+        self.left_network_dir.evalute(R)
+        self.left_network_motors.evalute(R)
+
+        self.right_network.evalute(R)
+        self.right_network_dir.evalute(R)
+        self.right_network_motors.evalute(R)
+
+        self.last_rewad=reward
