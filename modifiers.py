@@ -59,13 +59,13 @@ class HearingCenter(EmotionModifier):
         output=self.hearing.input(self.audio)
         
         if output=="unsettling":
-            emotions.unsettlement=self.average
+            emotions.unsettlement+=self.average
         elif output=="pleasent":
-            emotions.pleasure=self.average
+            emotions.pleasure+=self.average
         elif output=="scary":
-            emotions.fear=self.average
+            emotions.fear+=self.average
         elif output=="nervous":
-            emotions.anger=self.average
+            emotions.anger+=self.average
 
     
 
@@ -87,7 +87,7 @@ class FrontSensorModifier(EmotionModifier):
     def modify(self, emotions: EmotionTuple):
         
         if self.distance <= self.THRESHOLD:
-            emotions.fear=1
+            emotions.fear+=1
 
 class FloorSensorModifier(EmotionModifier):
     def __init__(self,name:str) -> None:
@@ -106,8 +106,8 @@ class FloorSensorModifier(EmotionModifier):
     
     def modify(self, emotions: EmotionTuple):
         
-        if self.distance >= self.THRESHOLD:
-            emotions.fear=1
+        if self.distance<=self.THRESHOLD:
+            emotions.fear+=1.0 - self.distance/self.THRESHOLD
 
 
 class ShockModifier(EmotionModifier):
@@ -142,13 +142,13 @@ class ShockModifier(EmotionModifier):
 
             if np.mean(drag)>self.GYRO_THRESHOLD:
                 print(np.mean(drag))
-                emotions.anger=1
+                emotions.anger+=1
 
         if np.mean(self.last_acceleration)>0:
             drag=np.subtract(self.last_acceleration,self.acceleration,dtype=np.float32)/STEP_TIME #(self.time-self.last_time)
 
             if np.mean(drag)>self.ACCEL_THRESHOLD:
-                emotions.fear=1
+                emotions.fear+=1
         
         self.last_gyroscope=self.gyroscope
         self.last_acceleration=self.acceleration

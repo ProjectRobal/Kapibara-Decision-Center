@@ -29,7 +29,7 @@ class KapibaraAudio:
         self.answers=['neutral','unsettling','pleasent','scary','nervous']
         self.sample_rate=16000
         self.buffer_size=BUFFER_SIZE
-        self.last_spectogram=None
+        self.last_spectogram=self.gen_spectogram(np.zeros(BUFFER_SIZE,dtype=np.float64))
 
     '''read samples from dataset'''
     def read_samples(self,dir,file="train.csv",delimiter=';'):

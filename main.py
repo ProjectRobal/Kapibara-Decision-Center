@@ -13,6 +13,7 @@ Change threshold for Shock modifier
 
 '''
 
+
 import network.client as client
 from _grpc.rc_service_pb2 import _None,Motor,DistanceSensor,Gyroscope,Servo,AudioChunk,Command,Message
 import numpy as np
@@ -58,6 +59,7 @@ emotions=EmotionTuple()
 modifiers:list[EmotionModifier]=[
     HearingCenter(),
     FrontSensorModifier("Distance_Front"),
+    FrontSensorModifier("Distance_Front1"),
     FloorSensorModifier("Distance_Floor"),
     ShockModifier(),
     BoringModifier()
@@ -99,7 +101,6 @@ iteration:int=0
 
 mind=Mind(emotions)
 
-mind.init_model()
 
 
 with client.connect('127.0.0.1:5051') as channels:
@@ -111,6 +112,8 @@ with client.connect('127.0.0.1:5051') as channels:
         data=preprocess_data(msg,data)
 
         emotions.clear()
+
+        start_t=timer()
 
         for mod in modifiers:
             mod.retriveData(data)
@@ -125,6 +128,8 @@ with client.connect('127.0.0.1:5051') as channels:
         mind.getData(data)
 
         output=mind.loop()
+
+        print("Elapsed: ",timer()-start_t, "s")
 
         data["Motors"]["speedA"]=output.motor1()[0]
         data["Motors"]["speedB"]=output.motor2()[0]
@@ -142,6 +147,8 @@ with client.connect('127.0.0.1:5051') as channels:
         reward=emotions.estimate()
 
         mind.setMark(reward)
+
+        print("Reward: ",reward)
 
         print("Iteration: ",iteration)
         iteration+=1

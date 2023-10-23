@@ -12,6 +12,8 @@ from KCN.layer import RecurrentLayer
 from KCN.activation.sigmoid import Sigmoid
 from KCN.activation.linear import Linear
 from KCN.activation.relu import Relu
+from KCN.initializer.gaussinit import GaussInit
+from KCN.BreedStrategy import BreedStrategy
 
 import math
 import os.path
@@ -30,7 +32,9 @@ Accelration is now a change of position
 
 '''
 
-DISTANCE_MAX_VAL=2048.0 # in mm
+MAX_SPEED=40
+
+ACCELERATION_MAX=(2.0/32767.0) # in mm
 MAX_ANGEL=360.0
 
 FLOOR_SENSORS_COUNT=1
@@ -46,29 +50,34 @@ class MindOutputs:
         self.directionB=directionB
         self.reward=reward
 
-    def get(self)->tuple[float]:
+    def get(self)->tuple[np.float64]:
         return (self.speedA,self.speedB,self.directionA,self.directionB)
     
-    def get_norm(self)->tuple[float]:
+    def get_norm(self)->tuple[np.float64]:
         return (self.speedA/100.0,self.speedB/100.0,self.directionA/4.0,self.directionB/4.0)
     
-    def get_reward(self)->float:
+    def get_reward(self)->np.float64:
         return self.reward
     
-    def set_reward(self,reward:float):
+    def set_reward(self,reward:np.float64):
         self.reward=reward
     
-    def set_from(self,speedA:float,speedB:float,directionA:float,directionB:float):
+    def set_from(self,speedA:np.float64,speedB:np.float64,directionA:np.float64,directionB:np.float64):
 
-        self.speedA=speedA*100.0
-        self.speedB=speedB*100.0
+        self.speedA=(speedA*100)
+        self.speedB=(speedB*100)
 
-        if directionA>3:
+        if self.speedA>MAX_SPEED:
+            self.speedA=MAX_SPEED
+        if self.speedB>MAX_SPEED:
+            self.speedB=MAX_SPEED
+
+        if directionA<3:
             self.directionA=directionA
         else:
             self.directionA=3
         
-        if directionB>3:
+        if directionB<3:
             self.directionB=directionB
         else:
             self.directionB=3
@@ -81,7 +90,7 @@ class MindOutputs:
     
 class MindFrame:
     '''A pair of inputs and outputs of mind'''
-    def __init__(self,inputs,spectogram,output:MindOutputs,reward:float) -> None:
+    def __init__(self,inputs,spectogram,output:MindOutputs,reward:np.float64) -> None:
         self.input=(spectogram,inputs)
 
         self.output=output
@@ -117,6 +126,8 @@ class Mind:
 
     def __init__(self,emotions:EmotionTuple) -> None:
 
+        self.last_eval:float=0.0
+
         self.gyroscope=np.zeros(3,dtype=np.float32)
         self.accelerometer=np.zeros(3,dtype=np.float32)
 
@@ -133,28 +144,51 @@ class Mind:
         ''' 0...2 gyroscope, 3...5 accelerometer, 6...7 audio coefficient, floor_sensors, 
         front_sensors, spectogram, 2 outputs from second network'''
 
-        self.input_size=len(self.gyroscope)+len(self.accelerometer)+len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT+4
+        self.input_size=len(self.gyroscope)+len(self.accelerometer)+len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT+4+(32*32)+1
 
-        self.inputs=np.ndarray(self.input_size,dtype=np.float32)
-        self.last_left_output=np.zeros(4,dtype=np.float32)
-        self.last_right_output=np.zeros(4,dtype=np.float32)
+        self.initializer=GaussInit(0,0.01)
+        self.initializer1=GaussInit(0,2.5)
+
+        self.inputs=np.ndarray(self.input_size,dtype=np.float64)
+        self.last_left_output=np.zeros(4,dtype=np.float64)
+        self.last_right_output=np.zeros(4,dtype=np.float64)
 
         self.left_network=Network(self.input_size)
+        self.left_network.setTrendFunction(self.TrendFunction)
 
-        self.left_network.addLayer(256,16,RecurrentLayer)
-        self.left_network.addLayer(4,8,RecurrentLayer,[Sigmoid,Sigmoid,Sigmoid,Relu])
+        self.left_network.addLayer(256,16,RecurrentLayer,[Relu]*256,self.initializer)
+
+        self.left_network_motors=Network(256)
+        self.left_network_motors.setTrendFunction(self.TrendFunction)
+
+        self.left_network_motors.addLayer(1,4,RecurrentLayer,[Relu],self.initializer1)
+
+        self.left_network_dir=Network(256)
+        self.left_network_dir.setTrendFunction(self.TrendFunction)
+
+        self.left_network_dir.addLayer(3,4,RecurrentLayer,[Relu,Relu,Relu],self.initializer)
 
         self.right_network=Network(self.input_size)
+        self.right_network.setTrendFunction(self.TrendFunction)
 
-        self.right_network.addLayer(256,16,RecurrentLayer)
-        self.right_network.addLayer(4,8,RecurrentLayer,[Sigmoid,Sigmoid,Sigmoid,Relu])
+        self.right_network.addLayer(256,16,RecurrentLayer,[Relu]*256,self.initializer)
+
+        self.right_network_motors=Network(256)
+        self.right_network_motors.setTrendFunction(self.TrendFunction)
+
+        self.right_network_motors.addLayer(1,4,RecurrentLayer,[Relu],self.initializer1)
+
+        self.right_network_dir=Network(256)
+        self.right_network_dir.setTrendFunction(self.TrendFunction)
+
+        self.right_network_dir.addLayer(3,4,RecurrentLayer,[Relu,Relu,Relu],self.initializer)
         
         self.spectogram=None
 
     def getData(self,data:dict):
 
         self.inputs[0:3]=data["Gyroscope"]["gyroscope"]/MAX_ANGEL
-        self.inputs[4:7]=data["Gyroscope"]["acceleration"]/DISTANCE_MAX_VAL
+        self.inputs[4:7]=data["Gyroscope"]["acceleration"]/ACCELERATION_MAX
 
         self.inputs[8]=data["Distance_Front"]["distance"]/8160.0
         self.inputs[9]=data["Distance_Front1"]["distance"]/8160.0
@@ -166,12 +200,14 @@ class Mind:
 
         self.audio:np.array=np.add(left,right,dtype=np.float32)/2.0
 
+        print("Audio ",self.audio)
+
         m:float=np.max(self.audio)
 
         l:float=np.max(left)
         r:float=np.max(right)
 
-        if m==0:
+        if m==0.0:
             self.audio_coff=(0.0,0.0)
         else:
             self.audio_coff=(l/m,r/m)
@@ -181,27 +217,64 @@ class Mind:
 
         self.spectogram=data["spectogram"]
 
-        self.inputs[13:]=self.spectogram.resize(32*32,)
+        print(cv2.resize(self.spectogram.numpy(),(32,32)).reshape(32*32,))
 
+        self.inputs[13:-3]=cv2.resize(self.spectogram.numpy(),(32,32)).reshape(32*32,)
+
+        print("Inputs: ",self.inputs[-5:])
+        #input()
+
+    def eval_filter(self,deval:float):
+        return np.clip(np.exp(4*deval-12)-np.exp(-4*deval-12),-0.3,1.0)
+
+    def TrendFunction(self,eval:float,network:Network)->float:
+
+        out:float=self.eval_filter(eval-self.last_eval)
+
+        self.last_eval=eval
+
+        print("dEval: ",out)
+
+        if eval>=0.0:
+            return 1.0
+
+        return out
         
     def loop(self)->MindOutputs:
 
-        self.inputs[self.input_size-2:]=self.last_right_output[:]
-        self.last_left_output[:]=self.left_network(self.inputs)
+
+        self.inputs[self.input_size-4:]=self.last_right_output[:]
+        
+        first_outputs=self.left_network.step(self.inputs)
+
+        self.last_left_output[3]=self.left_network_motors.step(first_outputs)[0]
+        self.last_left_output[:3]=self.left_network_dir.step(first_outputs)[:]
 
 
-        self.inputs[self.input_size-2:]=self.last_left_output[:]
-        self.last_right_output[:]=self.right_network(self.inputs)
+        self.inputs[self.input_size-4:]=self.last_left_output[:]
+        
+        first_outputs=self.right_network.step(self.inputs)
+
+        self.last_right_output[3]=self.right_network_motors.step(first_outputs)[0]
+        self.last_right_output[:3]=self.right_network_dir.step(first_outputs)[:]
+
+        print("Right output: ",self.last_right_output)
+        print("Left output: ",self.last_left_output)
+        #input()
         
         self.last_output=MindOutputs()
 
         self.last_output.set_from(self.last_left_output[3],self.last_right_output[3],
-                                  np.argmax(self.last_left_output[:2]),np.argmax(self.last_right_output[:2]))
-
+                                  np.argmax(self.last_left_output[:3]),np.argmax(self.last_right_output[:3]))
+        
         return self.last_output
             
     def setMark(self,reward:float):
 
         self.left_network.evalute(reward)
-        
+        self.left_network_dir.evalute(reward)
+        self.left_network_motors.evalute(reward)
+
         self.right_network.evalute(reward)
+        self.right_network_dir.evalute(reward)
+        self.right_network_motors.evalute(reward)
