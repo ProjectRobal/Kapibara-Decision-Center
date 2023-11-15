@@ -8,7 +8,7 @@ import tensorflow as tf
 import time
 
 from KCN.network import Network
-from KCN.layer import RecurrentLayer
+from KCN.layer import RecurrentLayer,Layer
 from KCN.activation.sigmoid import Sigmoid
 from KCN.activation.linear import Linear
 from KCN.activation.relu import Relu
@@ -147,8 +147,8 @@ class Mind:
 
         self.input_size=len(self.gyroscope)+len(self.accelerometer)+len(self.audio_coff)+FLOOR_SENSORS_COUNT+FRONT_SENSORS_COUNT+4+(32*32)+1
 
-        self.initializer=GaussInit(0,0.001)
-        self.initializer1=GaussInit(0,2.0)
+        self.initializer=GaussInit(0,0.0001)
+        self.initializer1=GaussInit(0,0.5)
 
         self.inputs=np.ndarray(self.input_size,dtype=np.float64)
         self.last_left_output=np.zeros(4,dtype=np.float64)
@@ -164,13 +164,13 @@ class Mind:
         self.left_network_motors.last_eval=0
         self.left_network_motors.setTrendFunction(self.TrendFunction)
 
-        self.left_network_motors.addLayer(1,4,RecurrentLayer,[Relu],self.initializer1)
+        self.left_network_motors.addLayer(1,4,Layer,[Relu],self.initializer1)
 
         self.left_network_dir=Network(256)
         self.left_network_dir.last_eval=0
         self.left_network_dir.setTrendFunction(self.TrendFunction)
 
-        self.left_network_dir.addLayer(3,4,RecurrentLayer,[Relu,Relu,Relu],self.initializer)
+        self.left_network_dir.addLayer(3,4,Layer,[Relu,Relu,Relu],self.initializer)
 
         self.right_network=Network(self.input_size)
         self.right_network.last_eval=0
@@ -182,13 +182,13 @@ class Mind:
         self.right_network_motors.last_eval=0
         self.right_network_motors.setTrendFunction(self.TrendFunction)
 
-        self.right_network_motors.addLayer(1,4,RecurrentLayer,[Relu],self.initializer1)
+        self.right_network_motors.addLayer(1,4,Layer,[Relu],self.initializer1)
 
         self.right_network_dir=Network(256)
         self.right_network_dir.last_eval=0
         self.right_network_dir.setTrendFunction(self.TrendFunction)
 
-        self.right_network_dir.addLayer(3,4,RecurrentLayer,[Relu,Relu,Relu],self.initializer)
+        self.right_network_dir.addLayer(3,4,Layer,[Relu,Relu,Relu],self.initializer)
         
         self.spectogram=None
 
@@ -278,12 +278,12 @@ class Mind:
             
     def setMark(self,reward:float):
 
-        R:float=0
+        R:float=reward
 
-        if reward>0:
-            R=200
-        else:
-            R=1000.0*(reward-self.last_rewad)
+        #if reward>0:
+        #    R=200
+        #else:
+        #    R=1000.0*(reward-self.last_rewad)
 
 
         self.left_network.evalute(R)

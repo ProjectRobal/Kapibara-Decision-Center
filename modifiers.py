@@ -70,13 +70,14 @@ class HearingCenter(EmotionModifier):
     
 
 class FrontSensorModifier(EmotionModifier):
-    def __init__(self,name:str) -> None:
+    def __init__(self,name:str,weight:float=1.0) -> None:
         '''name - sensor name'''
         super().__init__()
         # a distance in wich robot will 'feel' pain in mm
         self.THRESHOLD=100
         self.distance=0
         self.name=name
+        self.weight=weight
 
     def retriveData(self, data: dict):
         try:
@@ -87,7 +88,7 @@ class FrontSensorModifier(EmotionModifier):
     def modify(self, emotions: EmotionTuple):
         
         if self.distance <= self.THRESHOLD:
-            emotions.fear+=1
+            emotions.fear+=(1*self.weight)
 
 class FloorSensorModifier(EmotionModifier):
     def __init__(self,name:str) -> None:
